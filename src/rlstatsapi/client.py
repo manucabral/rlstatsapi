@@ -9,7 +9,6 @@ from collections import defaultdict
 from typing import Any, AsyncIterator, Awaitable, Callable
 
 from .models import EventMessage
-from ._websocket import SimpleWebSocket, connect_websocket
 
 Handler = Callable[[EventMessage], Awaitable[None] | None]
 
@@ -41,7 +40,8 @@ class StatsClient:
         self._handlers_any: list[Handler] = []
         self._logger = logging.getLogger("rlstatsapi")
 
-        self._ws: SimpleWebSocket | None = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
         self._reader_task: asyncio.Task[None] | None = None
         self._stopping = False
 
@@ -58,10 +58,12 @@ class StatsClient:
         self._stopping = True
         self._log("disconnect requested")
 
-        if self._ws is not None:
+        if self._writer is not None:
             with contextlib.suppress(Exception):
-                await self._ws.close()
-            self._ws = None
+                self._writer.close()
+                await self._writer.wait_closed()
+            self._writer = None
+            self._reader = None
 
         if self._reader_task is not None:
             self._reader_task.cancel()
@@ -83,14 +85,13 @@ class StatsClient:
     async def _run(self) -> None:
         while not self._stopping:
             try:
-                self._log(f"connecting to ws://{self.host}:{self.port}")
-                self._ws = await connect_websocket(
-                    host=self.host,
-                    port=self.port,
+                self._log(f"connecting to tcp://{self.host}:{self.port}")
+                self._reader, self._writer = await asyncio.wait_for(
+                    asyncio.open_connection(host=self.host, port=self.port),
                     timeout=self.connect_timeout,
                 )
-                self._log("websocket connected")
-                await self._read_loop(self._ws)
+                self._log("tcp socket connected")
+                await self._read_loop(self._reader)
             except asyncio.CancelledError:
                 self._log("reader task cancelled")
                 raise
@@ -102,22 +103,48 @@ class StatsClient:
                 self._log(f"reconnecting in {self.reconnect_delay:.2f}s")
                 await asyncio.sleep(self.reconnect_delay)
             finally:
-                if self._ws is not None:
+                if self._writer is not None:
                     with contextlib.suppress(Exception):
-                        await self._ws.close()
-                    self._ws = None
-                    self._log("websocket closed")
+                        self._writer.close()
+                        await self._writer.wait_closed()
+                    self._writer = None
+                    self._reader = None
+                    self._log("tcp socket closed")
 
-    async def _read_loop(self, ws: SimpleWebSocket) -> None:
+    async def _read_loop(self, reader: asyncio.StreamReader) -> None:
+        decoder = json.JSONDecoder()
+        buffer = ""
         while not self._stopping:
-            raw = await ws.recv_text()
-            message = _parse_message(raw, include_raw=self.include_raw)
-            if message is None:
-                self._log("ignored invalid message (json/envelope)")
-                continue
+            chunk = await reader.read(4096)
+            if not chunk:
+                raise ConnectionAbortedError("Socket closed by peer")
+            buffer += chunk.decode("utf-8", errors="ignore")
 
-            await self._queue.put(message)
-            await self._dispatch(message)
+            while True:
+                lstripped = buffer.lstrip()
+                if not lstripped:
+                    buffer = ""
+                    break
+                if lstripped is not buffer:
+                    buffer = lstripped
+
+                try:
+                    decoded, end_idx = decoder.raw_decode(buffer)
+                except json.JSONDecodeError:
+                    break
+
+                raw = buffer[:end_idx]
+                buffer = buffer[end_idx:]
+
+                message = _parse_message_obj(
+                    decoded, raw=raw, include_raw=self.include_raw
+                )
+                if message is None:
+                    self._log("ignored invalid message (json/envelope)")
+                    continue
+
+                await self._queue.put(message)
+                await self._dispatch(message)
 
     async def _dispatch(self, message: EventMessage) -> None:
         handlers = self._handlers_any + self._handlers_by_event.get(message.event, [])
@@ -137,14 +164,19 @@ class StatsClient:
             self._logger.info("[StatsClient] %s", message)
 
 
-def _parse_message(raw: str, *, include_raw: bool) -> EventMessage | None:
-    try:
-        decoded = json.loads(raw)
-    except json.JSONDecodeError:
+def _parse_message_obj(
+    decoded: Any, *, raw: str, include_raw: bool
+) -> EventMessage | None:
+    if not isinstance(decoded, dict):
         return None
-
     event = decoded.get("Event")
     data = decoded.get("Data")
+
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            return None
 
     if not isinstance(event, str) or not isinstance(data, dict):
         return None

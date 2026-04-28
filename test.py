@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+
 from rlstatsapi import StatsClient
 
 logging.basicConfig(
@@ -8,19 +10,17 @@ logging.basicConfig(
 )
 
 
-async def on_goal(msg):
-    scorer = msg.data.get("Scorer", {})
-    logging.info("GOAL: %s", scorer.get("Name", "Unknown"))
-
-
 async def main() -> None:
-    client = StatsClient(log_enabled=True, reconnect=True, reconnect_delay=1.0)
+    client = StatsClient(log_enabled=True)
 
-    client.on_any(lambda msg: logging.info("EVENT: %s", msg.event))
-    client.on("GoalScored", on_goal)
+    def log_event(msg) -> None:
+        logging.info("EVENT: %s", msg.event)
+        logging.info("DATA: %s", json.dumps(msg.data, ensure_ascii=False))
+
+    client.on_any(log_event)
 
     await client.connect()
-    logging.info("Listening for Rocket League events... Press Ctrl+C to stop.")
+    logging.info("Listening to all Rocket League events. Press Ctrl+C to stop.")
 
     try:
         await asyncio.Event().wait()

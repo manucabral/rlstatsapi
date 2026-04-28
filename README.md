@@ -1,6 +1,6 @@
 # RL Stats API
 
-`rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API websocket events.
+`rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API events over a local TCP socket.
 
 ## Install
 
@@ -24,7 +24,7 @@ Before launching Rocket League, edit:
 
 Use at least:
 
-- `PacketSendRate=60` (any value `> 0` enables the socket)
+- `PacketSendRate=30` (any value `> 0` enables the exporter)
 - `Port=49123`
 
 Restart the game after changing the file.
@@ -63,5 +63,5 @@ asyncio.run(main())
 
 ## Notes
 
-- Works for regular matches, some fields like `MatchGuid` are only present in online/LAN contexts.
-- If you see connection refused, Rocket League is not exposing the socket yet (check config and restart).
+- Works for regular matches. Some fields like `MatchGuid` are only present in online/LAN contexts.
+- In current builds this endpoint may behave as plain TCP JSON stream instead of websocket upgrade. This library handles the TCP stream format.

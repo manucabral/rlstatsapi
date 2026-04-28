@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rlstatsapi"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rocket League Stats API client"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Manuel Cabral" }]
-keywords = ["rocket-league", "stats", "websocket", "asyncio"]
+keywords = ["rocket-league", "stats", "socket", "asyncio"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
