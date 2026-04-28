@@ -1,4 +1,6 @@
 # RL Stats API
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![PyPI version](https://img.shields.io/pypi/v/rlstatsapi.svg)](https://pypi.org/project/rlstatsapi/)
+
 
 `rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API events over a local TCP socket.
 
