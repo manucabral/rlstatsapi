@@ -29,4 +29,4 @@ jobs:
 
       - name: Run pylint
         run: |
-          pylint src test.py test2.py examples
+          pylint src examples
