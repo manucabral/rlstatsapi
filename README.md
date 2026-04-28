@@ -1,4 +1,4 @@
-# Rocket League Stats API Library in Python
+# RL Stats API
 
 `rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API websocket events.
 
