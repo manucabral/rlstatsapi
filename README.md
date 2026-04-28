@@ -38,7 +38,6 @@ from rlstatsapi import StatsClient
 
 logging.basicConfig(level=logging.INFO)
 
-
 async def main() -> None:
     client = StatsClient(log_enabled=True)
     client.on_any(lambda msg: print(msg.event, msg.data))
@@ -49,20 +48,10 @@ async def main() -> None:
     finally:
         await client.disconnect()
 
-
 asyncio.run(main())
 ```
 
-## Public API
-
-- `StatsClient(host="127.0.0.1", port=49123, reconnect=True, reconnect_delay=0.5, include_raw=False, queue_size=2048, connect_timeout=5.0, log_enabled=False)`
-- `connect()` / `disconnect()`
-- `on(event_name, handler)`
-- `on_any(handler)`
-- `events()`
-- typed helpers: `EventName`, `TypedEventMessage[...]`, `cast_event_data(...)`
-
-## Typed event example (Pylance-friendly)
+## Example Event (Goals)
 
 ```python
 import asyncio
@@ -70,12 +59,10 @@ from rlstatsapi import StatsClient
 from rlstatsapi.models import EventMessage
 from rlstatsapi.types import GoalScoredPayload, cast_event_data
 
-
 async def on_goal(msg: EventMessage) -> None:
     data: GoalScoredPayload = cast_event_data("GoalScored", msg.data)
     scorer = data.get("Scorer", {})
     print("Goal by:", scorer.get("Name"))
-
 
 async def main() -> None:
     client = StatsClient()
@@ -86,9 +73,19 @@ async def main() -> None:
     finally:
         await client.disconnect()
 
-
 asyncio.run(main())
 ```
+
+
+## Public API
+
+- `StatsClient(...)`
+- `connect()` / `disconnect()`
+- `on(event_name, handler)`
+- `on_any(handler)`
+- `events()`
+- typed helpers: `EventName`, `TypedEventMessage[...]`, `cast_event_data(...)`
+
 
 ## Notes
 
