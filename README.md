@@ -16,7 +16,7 @@ pip install rlstatsapi
 From GitHub (latest `main`):
 
 ```bash
-pip install git+https://github.com/nania/RocketLeagueStatsAPI.git
+pip install git+https://github.com/manucabral/RocketLeagueStatsAPI.git
 ```
 
 ## Rocket League setup
