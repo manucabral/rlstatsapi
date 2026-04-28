@@ -2,9 +2,6 @@
 
 `rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API events over a local TCP socket.
 
-
-
-
 ## Install
 
 From PyPI:
@@ -31,13 +28,6 @@ Use at least:
 - `Port=49123`
 
 Restart the game after changing the file.
-
-
-## Simple Example
-
-https://github.com/user-attachments/assets/0a732000-37dd-48c4-b5f7-cc691abb4e92
-
-
 
 ## Quick start
 
@@ -70,6 +60,35 @@ asyncio.run(main())
 - `on(event_name, handler)`
 - `on_any(handler)`
 - `events()`
+- typed helpers: `EventName`, `TypedEventMessage[...]`, `cast_event_data(...)`
+
+## Typed event example (Pylance-friendly)
+
+```python
+import asyncio
+from rlstatsapi import StatsClient
+from rlstatsapi.models import EventMessage
+from rlstatsapi.types import GoalScoredPayload, cast_event_data
+
+
+async def on_goal(msg: EventMessage) -> None:
+    data: GoalScoredPayload = cast_event_data("GoalScored", msg.data)
+    scorer = data.get("Scorer", {})
+    print("Goal by:", scorer.get("Name"))
+
+
+async def main() -> None:
+    client = StatsClient()
+    client.on("GoalScored", on_goal)
+    await client.connect()
+    try:
+        await asyncio.Event().wait()
+    finally:
+        await client.disconnect()
+
+
+asyncio.run(main())
+```
 
 ## Notes
 
