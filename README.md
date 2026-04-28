@@ -2,6 +2,9 @@
 
 `rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API events over a local TCP socket.
 
+
+
+
 ## Install
 
 From PyPI:
@@ -28,6 +31,13 @@ Use at least:
 - `Port=49123`
 
 Restart the game after changing the file.
+
+
+## Simple Example
+
+https://github.com/user-attachments/assets/0a732000-37dd-48c4-b5f7-cc691abb4e92
+
+
 
 ## Quick start
 
