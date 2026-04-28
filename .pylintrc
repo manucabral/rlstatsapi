@@ -1,0 +1,23 @@
+[MASTER]
+ignore=build,dist
+
+[MESSAGES CONTROL]
+disable=
+    C0114,
+    C0115,
+    C0116,
+    C0327,
+    R0801,
+    R0902,
+    R0913,
+    R0917,
+    W0718,
+    C0103
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+max-args=12
+max-positional-arguments=12
+max-attributes=20
