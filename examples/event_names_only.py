@@ -6,17 +6,14 @@ from rlstatsapi import StatsClient
 async def main() -> None:
     client = StatsClient()
 
-    def on_any(msg) -> None:
-        print(msg.event)
+    client.on_connect(lambda: print("Connected to Rocket League Stats API"))
+    client.on_disconnect(lambda: print("Disconnected"))
 
-    client.on_any(on_any)
-    await client.connect()
-    print("Listening to event names... Press Ctrl+C to stop.")
+    client.on_any(lambda msg: print(msg.event))
 
-    try:
+    async with client:
+        print("Listening to event names... Press Ctrl+C to stop.")
         await asyncio.Event().wait()
-    finally:
-        await client.disconnect()
 
 
 if __name__ == "__main__":

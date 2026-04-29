@@ -1,26 +1,22 @@
 import asyncio
 
-from rlstatsapi import StatsClient
-from rlstatsapi.types import cast_event_data
+from rlstatsapi import StatsClient, TypedEventMessage, ClockUpdatedSecondsPayload
 
 
 async def main() -> None:
     client = StatsClient()
 
-    def on_clock(msg) -> None:
-        data = cast_event_data("ClockUpdatedSeconds", msg.data)
-        secs = int(data.get("TimeSeconds", 0))
+    def on_clock(msg: TypedEventMessage[ClockUpdatedSecondsPayload]) -> None:
+        secs = int(msg.data.get("TimeSeconds", 0))
         mins, rem = divmod(max(0, secs), 60)
-        print(f"Clock: {mins:02d}:{rem:02d}")
+        overtime = " OT" if msg.data.get("bOvertime") else ""
+        print(f"Clock: {mins:02d}:{rem:02d}{overtime}")
 
-    client.on("ClockUpdatedSeconds", on_clock)
-    await client.connect()
-    print("Listening to clock updates... Press Ctrl+C to stop.")
+    client.on_clock_updated_seconds(on_clock)
 
-    try:
+    async with client:
+        print("Listening to clock updates... Press Ctrl+C to stop.")
         await asyncio.Event().wait()
-    finally:
-        await client.disconnect()
 
 
 if __name__ == "__main__":

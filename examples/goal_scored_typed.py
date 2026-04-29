@@ -1,28 +1,29 @@
 import asyncio
 
-from rlstatsapi import StatsClient
-from rlstatsapi.models import EventMessage
-from rlstatsapi.types import GoalScoredPayload, cast_event_data
+from rlstatsapi import StatsClient, TypedEventMessage, GoalScoredPayload
 
 
-async def on_goal(msg: EventMessage) -> None:
-    data: GoalScoredPayload = cast_event_data("GoalScored", msg.data)
-    scorer = data.get("Scorer", {})
+async def on_goal(msg: TypedEventMessage[GoalScoredPayload]) -> None:
+    scorer = msg.data.get("Scorer", {})
+    assister = msg.data.get("Assister", {})
+    speed = msg.data.get("GoalSpeed", 0.0)
+
     name = scorer.get("Name", "Unknown")
-    print(f"Goal by: {name}")
+    assist_name = assister.get("Name") if assister else None
+
+    line = f"GOAL by {name} ({speed:.0f} km/h)"
+    if assist_name:
+        line += f"assist: {assist_name}"
+    print(line)
 
 
 async def main() -> None:
     client = StatsClient()
-    client.on("GoalScored", on_goal)
+    client.on_goal_scored(on_goal)
 
-    await client.connect()
-    print("Listening for GoalScored events... Press Ctrl+C to stop.")
-
-    try:
+    async with client:
+        print("Listening for GoalScored events... Press Ctrl+C to stop.")
         await asyncio.Event().wait()
-    finally:
-        await client.disconnect()
 
 
 if __name__ == "__main__":
