@@ -44,6 +44,11 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Demos
+
+- [All Events demo](docs/videos/events.mp4)
+- [UI demo](docs/videos/ui-demo.mp4)
+
 ## Typed event handlers
 
 Every known event has a typed convenience method. No manual casting needed.
