@@ -1,0 +1,22 @@
+.md-header {
+  box-shadow: none;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-content h1 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset {
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.md-typeset code {
+  border-radius: 0.35rem;
+}
+
+.md-sidebar--primary .md-nav__title {
+  font-weight: 700;
+}

@@ -6,13 +6,17 @@ repo_name: manucabral/RocketLeagueStatsAPI
 
 theme:
   name: material
+  language: en
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
   features:
-    - navigation.tabs
     - navigation.sections
     - navigation.top
     - content.code.copy
-    - search.suggest
-    - search.highlight
+    - toc.follow
 
 plugins:
   - search
@@ -31,15 +35,18 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.details
 
+extra_css:
+  - stylesheets/extra.css
+
 nav:
-  - Home: index.md
+  - Introduction: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
-  - Typing: typing.md
   - Configuration: configuration.md
   - Events: events.md
   - API Reference: api.md
   - Examples: examples.md
+  - Typing: typing.md
   - Videos: videos.md
   - Contributing: contributing.md
   - Security: security.md
