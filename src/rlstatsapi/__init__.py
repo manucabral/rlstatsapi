@@ -3,11 +3,6 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
-try:
-    __version__: str = _pkg_version("rlstatsapi")
-except PackageNotFoundError:
-    __version__ = "unknown"
-
 from .client import StatsClient
 from .events import KNOWN_EVENTS
 from .models import EventMessage
@@ -36,6 +31,11 @@ from .types import (
     UpdateStatePayload,
     cast_event_data,
 )
+
+try:
+    __version__: str = _pkg_version("rlstatsapi")
+except PackageNotFoundError:
+    __version__ = "unknown"
 
 __all__ = [
     "__version__",
