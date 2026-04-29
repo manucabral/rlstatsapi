@@ -45,9 +45,9 @@ asyncio.run(main())
 ```
 
 ## Demos
+<img width="800" height="411" alt="allevents" src="https://github.com/manucabral/RocketLeagueStatsAPI/blob/main/docs/videos/allevents.gif" />
+<img width="800" height="411" alt="ui" src="https://github.com/manucabral/RocketLeagueStatsAPI/blob/main/docs/videos/ui.gif" />
 
-- [All Events demo](docs/videos/events.mp4)
-- [UI demo](docs/videos/ui-demo.mp4)
 
 ## Typed event handlers
 
