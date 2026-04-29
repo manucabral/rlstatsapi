@@ -137,6 +137,7 @@ class StatsClient:
         self._on_disconnect_handlers.append(handler)
 
     def on_handler_error(self, handler: _ErrorHandler) -> None:
+        """Register a callback for exceptions raised inside event handlers."""
         self._error_handlers.append(handler)
 
     @overload
@@ -423,6 +424,7 @@ class StatsClient:
     def on(self, event_name: str) -> Callable[[Handler], Handler]: ...
 
     def on(self, event_name: str, handler: _AnyCallable | None = None) -> Any:
+        """Register a handler for an event or return a decorator form of registration."""
         if handler is None:
 
             def decorator(h: _AnyCallable) -> _AnyCallable:
@@ -434,19 +436,23 @@ class StatsClient:
         return None
 
     def on_any(self, handler: Handler) -> None:
+        """Register a handler that runs for every incoming event."""
         self._handlers_any.append(handler)
 
     def off(self, event_name: str, handler: _AnyCallable) -> None:
+        """Unregister one handler for a specific event if present."""
         handlers = self._handlers_by_event.get(event_name)
         if handlers:
             with contextlib.suppress(ValueError):
                 handlers.remove(handler)
 
     def off_any(self, handler: _AnyCallable) -> None:
+        """Unregister a global handler registered with on_any."""
         with contextlib.suppress(ValueError):
             self._handlers_any.remove(handler)
 
     def once(self, event_name: str, handler: _AnyCallable) -> None:
+        """Register a handler that runs once and removes itself automatically."""
         async def wrapper(msg: EventMessage) -> None:
             self.off(event_name, wrapper)
             result = handler(msg)
@@ -461,12 +467,14 @@ class StatsClient:
             [TypedEventMessage[UpdateStatePayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering UpdateState handlers."""
         self._handlers_by_event["UpdateState"].append(handler)
 
     def on_ball_hit(
         self,
         handler: Callable[[TypedEventMessage[BallHitPayload]], Awaitable[None] | None],
     ) -> None:
+        """Typed helper for registering BallHit handlers."""
         self._handlers_by_event["BallHit"].append(handler)
 
     def on_clock_updated_seconds(
@@ -475,6 +483,7 @@ class StatsClient:
             [TypedEventMessage[ClockUpdatedSecondsPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering ClockUpdatedSeconds handlers."""
         self._handlers_by_event["ClockUpdatedSeconds"].append(handler)
 
     def on_countdown_begin(
@@ -483,6 +492,7 @@ class StatsClient:
             [TypedEventMessage[CountdownBeginPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering CountdownBegin handlers."""
         self._handlers_by_event["CountdownBegin"].append(handler)
 
     def on_crossbar_hit(
@@ -491,6 +501,7 @@ class StatsClient:
             [TypedEventMessage[CrossbarHitPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering CrossbarHit handlers."""
         self._handlers_by_event["CrossbarHit"].append(handler)
 
     def on_goal_replay_end(
@@ -499,6 +510,7 @@ class StatsClient:
             [TypedEventMessage[GoalReplayEndPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering GoalReplayEnd handlers."""
         self._handlers_by_event["GoalReplayEnd"].append(handler)
 
     def on_goal_replay_start(
@@ -507,6 +519,7 @@ class StatsClient:
             [TypedEventMessage[GoalReplayStartPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering GoalReplayStart handlers."""
         self._handlers_by_event["GoalReplayStart"].append(handler)
 
     def on_goal_replay_will_end(
@@ -515,6 +528,7 @@ class StatsClient:
             [TypedEventMessage[GoalReplayWillEndPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering GoalReplayWillEnd handlers."""
         self._handlers_by_event["GoalReplayWillEnd"].append(handler)
 
     def on_goal_scored(
@@ -523,6 +537,7 @@ class StatsClient:
             [TypedEventMessage[GoalScoredPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering GoalScored handlers."""
         self._handlers_by_event["GoalScored"].append(handler)
 
     def on_match_created(
@@ -531,6 +546,7 @@ class StatsClient:
             [TypedEventMessage[MatchCreatedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering MatchCreated handlers."""
         self._handlers_by_event["MatchCreated"].append(handler)
 
     def on_match_initialized(
@@ -539,6 +555,7 @@ class StatsClient:
             [TypedEventMessage[MatchInitializedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering MatchInitialized handlers."""
         self._handlers_by_event["MatchInitialized"].append(handler)
 
     def on_match_destroyed(
@@ -547,6 +564,7 @@ class StatsClient:
             [TypedEventMessage[MatchDestroyedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering MatchDestroyed handlers."""
         self._handlers_by_event["MatchDestroyed"].append(handler)
 
     def on_match_ended(
@@ -555,6 +573,7 @@ class StatsClient:
             [TypedEventMessage[MatchEndedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering MatchEnded handlers."""
         self._handlers_by_event["MatchEnded"].append(handler)
 
     def on_match_paused(
@@ -563,6 +582,7 @@ class StatsClient:
             [TypedEventMessage[MatchPausedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering MatchPaused handlers."""
         self._handlers_by_event["MatchPaused"].append(handler)
 
     def on_match_unpaused(
@@ -571,6 +591,7 @@ class StatsClient:
             [TypedEventMessage[MatchUnpausedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering MatchUnpaused handlers."""
         self._handlers_by_event["MatchUnpaused"].append(handler)
 
     def on_podium_start(
@@ -579,6 +600,7 @@ class StatsClient:
             [TypedEventMessage[PodiumStartPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering PodiumStart handlers."""
         self._handlers_by_event["PodiumStart"].append(handler)
 
     def on_replay_created(
@@ -587,6 +609,7 @@ class StatsClient:
             [TypedEventMessage[ReplayCreatedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering ReplayCreated handlers."""
         self._handlers_by_event["ReplayCreated"].append(handler)
 
     def on_round_started(
@@ -595,6 +618,7 @@ class StatsClient:
             [TypedEventMessage[RoundStartedPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering RoundStarted handlers."""
         self._handlers_by_event["RoundStarted"].append(handler)
 
     def on_statfeed_event(
@@ -603,6 +627,7 @@ class StatsClient:
             [TypedEventMessage[StatfeedEventPayload]], Awaitable[None] | None
         ],
     ) -> None:
+        """Typed helper for registering StatfeedEvent handlers."""
         self._handlers_by_event["StatfeedEvent"].append(handler)
 
     async def events(self) -> AsyncIterator[EventMessage]:
@@ -735,6 +760,7 @@ class StatsClient:
                     self._logger.error("handler error for %s: %s", message.event, exc)
 
     async def _fire_simple(self, handlers: list[_SimpleHandler]) -> None:
+        """Run connection lifecycle callbacks and await async ones when needed."""
         for handler in list(handlers):
             with contextlib.suppress(Exception):
                 result = handler()
