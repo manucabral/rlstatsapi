@@ -713,7 +713,7 @@ class StatsClient:
 
     async def _dispatch(self, message: EventMessage) -> None:
         """
-        Dispatches an event message to all registered handlers for its event type, as well as any handlers registered for all events.
+        Dispatches to handlers for `message.event` and global handlers.
         """
         handlers = list(self._handlers_any) + list(
             self._handlers_by_event.get(message.event, [])
