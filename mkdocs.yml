@@ -1,0 +1,44 @@
+site_name: Rocket League Stats API
+site_description: Fast Python client for Rocket League Stats API events
+site_url: https://manucabral.github.io/RocketLeagueStatsAPI/
+repo_url: https://github.com/manucabral/RocketLeagueStatsAPI
+repo_name: manucabral/RocketLeagueStatsAPI
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Configuration: configuration.md
+  - Typing: typing.md
+  - Examples: examples.md
+  - Videos: videos.md
+  - API Reference: api.md
+  - Contributing: contributing.md
+  - Security: security.md
