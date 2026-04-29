@@ -21,3 +21,4 @@ max-line-length=100
 max-args=12
 max-positional-arguments=12
 max-attributes=20
+max-public-methods=40
