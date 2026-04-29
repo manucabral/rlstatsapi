@@ -1,3 +1,8 @@
+"""Core async TCP client for Rocket League's live Stats exporter.
+
+This module handles socket lifecycle, JSON stream framing, dispatching to user
+handlers, reconnect strategy, and queue backpressure behavior.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -40,7 +45,7 @@ _ErrorHandler = Callable[[str, Exception], Awaitable[None] | None]
 
 
 class StatsClient:
-    """Client for Rocket League Stats API."""
+    """High-level event client for Rocket League Stats API."""
 
     def __init__(
         self,
@@ -124,15 +129,11 @@ class StatsClient:
         self._logger.debug("disconnected")
 
     def on_connect(self, handler: _SimpleHandler) -> None:
-        """
-        Registers a handler to be called when a connection to the Stats API is established.}}
-        """
+        """Register a callback fired after TCP connection is established."""
         self._on_connect_handlers.append(handler)
 
     def on_disconnect(self, handler: _SimpleHandler) -> None:
-        """
-        Registers a handler to be called when a connection to the Stats API is lost.
-        """
+        """Register a callback fired when the active TCP session is closed."""
         self._on_disconnect_handlers.append(handler)
 
     def on_handler_error(self, handler: _ErrorHandler) -> None:
@@ -744,9 +745,7 @@ class StatsClient:
 def _parse_message_obj(
     decoded: Any, *, raw: str, include_raw: bool
 ) -> EventMessage | None:
-    """
-    Parses a decoded JSON object into an EventMessage, validating the expected structure.
-    """
+    """Normalize one decoded object into an EventMessage envelope."""
     if not isinstance(decoded, dict):
         return None
     event = decoded.get("Event")

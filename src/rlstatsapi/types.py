@@ -1,5 +1,10 @@
-from __future__ import annotations
+"""
+Static typing layer for documented Rocket League event payloads.
 
+TypedDicts here mirror the official event schema and are designed for IDE
+autocomplete and type-checking, without adding runtime parsing overhead.
+"""
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import (
     Any,
