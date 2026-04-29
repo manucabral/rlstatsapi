@@ -1,7 +1,5 @@
-# RL Stats API
+# Rocket League Stats API
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![PyPI version](https://img.shields.io/pypi/v/rlstatsapi.svg)](https://pypi.org/project/rlstatsapi/) [![Pylint](https://github.com/manucabral/RocketLeagueStatsAPI/actions/workflows/pylint.yml/badge.svg)](https://github.com/manucabral/RocketLeagueStatsAPI/actions/workflows/pylint.yml)
-
-
 
 `rlstatsapi` is a simple and fast Python client for reading live Rocket League Stats API events over a local TCP socket.
 
@@ -36,61 +34,123 @@ Restart the game after changing the file.
 
 ```python
 import asyncio
-import logging
 from rlstatsapi import StatsClient
 
-logging.basicConfig(level=logging.INFO)
-
 async def main() -> None:
-    client = StatsClient(log_enabled=True)
-    client.on_any(lambda msg: print(msg.event, msg.data))
-
-    await client.connect()
-    try:
+    async with StatsClient() as client:
+        client.on_any(lambda msg: print(msg.event, msg.data))
         await asyncio.Event().wait()
-    finally:
-        await client.disconnect()
 
 asyncio.run(main())
 ```
 
-## Example Event (Goals)
+## Typed event handlers
+
+Every known event has a typed convenience method. No manual casting needed.
 
 ```python
 import asyncio
-from rlstatsapi import StatsClient
-from rlstatsapi.models import EventMessage
-from rlstatsapi.types import GoalScoredPayload, cast_event_data
+from rlstatsapi import StatsClient, TypedEventMessage, GoalScoredPayload
 
-async def on_goal(msg: EventMessage) -> None:
-    data: GoalScoredPayload = cast_event_data("GoalScored", msg.data)
-    scorer = data.get("Scorer", {})
-    print("Goal by:", scorer.get("Name"))
+async def on_goal(msg: TypedEventMessage[GoalScoredPayload]) -> None:
+    scorer = msg.data.get("Scorer", {})
+    speed = msg.data.get("GoalSpeed", 0.0)
+    print(f"Goal by {scorer.get('Name')} at {speed:.0f} km/h")
 
 async def main() -> None:
-    client = StatsClient()
-    client.on("GoalScored", on_goal)
-    await client.connect()
-    try:
+    async with StatsClient() as client:
+        client.on_goal_scored(on_goal)
         await asyncio.Event().wait()
-    finally:
-        await client.disconnect()
 
 asyncio.run(main())
 ```
 
+The decorator form of `on()` is also supported:
+
+```python
+@client.on("GoalScored")
+async def on_goal(msg: TypedEventMessage[GoalScoredPayload]) -> None:
+    ...
+```
+
+## Connection events
+
+```python
+client.on_connect(lambda: print("Connected"))
+client.on_disconnect(lambda: print("Disconnected"))
+```
+
+## Error handling
+
+```python
+def on_error(event_name: str, exc: Exception) -> None:
+    print(f"Handler error for {event_name}: {exc}")
+
+client.on_handler_error(on_error)
+```
+
+Without a registered error handler, exceptions log at `ERROR` level automatically.
+
+## Handler deregistration
+
+```python
+client.off("GoalScored", my_handler)
+client.off_any(my_handler)
+
+# Fire once then auto-remove
+client.once("MatchCreated", lambda msg: print("Match started"))
+```
+
+## Logging
+
+Use the standard `logging` module, no library-specific flags needed:
+
+```python
+import logging
+logging.getLogger("rlstatsapi").setLevel(logging.DEBUG)
+```
+
+## `StatsClient` parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `host` | `"127.0.0.1"` | TCP host |
+| `port` | `49123` | TCP port |
+| `reconnect` | `True` | Auto-reconnect on drop |
+| `reconnect_delay` | `0.5` | Initial reconnect delay (s) |
+| `max_reconnect_delay` | `30.0` | Backoff cap (s) |
+| `max_reconnect_attempts` | `None` | Max retries (`None` = infinite) |
+| `connect_timeout` | `5.0` | TCP connect timeout (s) |
+| `include_raw` | `False` | Include raw JSON string in `EventMessage.raw` |
+| `queue_size` | `2048` | Internal event queue size |
+| `overflow` | `"block"` | Queue-full policy: `"block"` / `"drop"` / `"raise"` |
+
+Reconnect uses exponential backoff with ±25 % jitter: `min(delay × 2^n, max_reconnect_delay)`.
+
+## `is_connected`
+
+```python
+print(client.is_connected)  # True once TCP is established
+```
 
 ## Public API
 
-- `StatsClient(...)`
-- `connect()` / `disconnect()`
-- `on(event_name, handler)`
-- `on_any(handler)`
-- `events()`
-- typed helpers: `EventName`, `TypedEventMessage[...]`, `cast_event_data(...)`
+**Registration:**
+`on(event_name, handler)` · `on_any(handler)` · `on_<event>(handler)` · `on_connect(handler)` · `on_disconnect(handler)` · `on_handler_error(handler)`
 
+**Deregistration:**
+`off(event_name, handler)` · `off_any(handler)` · `once(event_name, handler)`
+
+**Lifecycle:**
+`connect()` · `disconnect()` · `async with StatsClient()`
+
+**Async iteration:**
+`events()` async iterator yielding `EventMessage`
+
+**Types:**
+`EventName` · `TypedEventMessage[T]` · `KnownEventMessage` · per-event payload types (`GoalScoredPayload`, `UpdateStatePayload`, …)
 
 ## Notes
 
 - Works for regular matches. Some fields like `MatchGuid` are only present in online/LAN contexts.
-- In current builds this endpoint may behave as plain TCP JSON stream instead of websocket upgrade. This library handles the TCP stream format.
+- In current builds this endpoint may behave as a plain TCP JSON stream instead of a WebSocket upgrade. This library handles the TCP stream format.
