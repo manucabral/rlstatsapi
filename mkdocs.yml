@@ -35,10 +35,11 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
-  - Configuration: configuration.md
   - Typing: typing.md
+  - Configuration: configuration.md
+  - Events: events.md
+  - API Reference: api.md
   - Examples: examples.md
   - Videos: videos.md
-  - API Reference: api.md
   - Contributing: contributing.md
   - Security: security.md
