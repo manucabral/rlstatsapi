@@ -6,6 +6,7 @@ autocomplete and type-checking, without adding runtime parsing overhead.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -256,6 +257,8 @@ TData = TypeVar("TData", bound=Mapping[str, Any])
 
 @dataclass(slots=True)
 class TypedEventMessage(Generic[TData]):
+    """Typed event envelope used by helpers and typed convenience callbacks."""
+
     event: str
     data: TData
     raw: str | None = None
