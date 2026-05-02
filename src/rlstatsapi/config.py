@@ -31,6 +31,7 @@ class StatsAPIConfigStatus:
     packet_send_rate: int | None
     port: int | None
     warning: str | None = None
+    discovery_scope: str = "windows-user-config"
 
 
 def candidate_stats_api_paths() -> list[Path]:
