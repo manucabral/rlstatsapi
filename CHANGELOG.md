@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+## 0.1.5
+
+### Added
+- CLI entrypoint with `status`, `enable`, `disable`, and `listen` commands
+- Event filtering with `StatsClient.events("...")`
+- `StatsClient.on_many(...)` for registering one handler across several events
+- `EventMessage.as_type(...)` for shorter typed narrowing
+- Lightweight match state tracking and client metrics
+- Recipes and compatibility docs
+- Release workflow for lint, tests, build, and PyPI publish on tags
+
+### Improved
+- README shortened and focused on setup plus quick start
+- Config docs now call out Windows-first discovery behavior
+- Tests are now split more clearly between unit and integration coverage
+
 ## 0.1.4
 
 `rlstatsapi` 0.1.4 adds built-in support for managing Rocket League Stats API configuration from Python.
