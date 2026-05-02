@@ -1,24 +1,25 @@
 name: Bug report
-description: Report a problem with rlstatsapi
-title: "[Bug] "
+description: Report a bug related to rlstatsapi
 labels: ["bug"]
+
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug.
+        Please check whether this bug has already been reported before opening a new issue.
+        If you find an existing report, add your details there instead of creating a duplicate.
 
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: Describe the problem clearly.
-      placeholder: The client connects, but no events are received.
+      label: Bug summary
+      description: Briefly describe the problem.
+      placeholder: The client connects, but no events are printed after joining a match.
     validations:
       required: true
 
   - type: textarea
-    id: steps_to_reproduce
+    id: steps-to-reproduce
     attributes:
       label: Steps to reproduce
       description: List the exact steps needed to reproduce the issue.
@@ -26,73 +27,133 @@ body:
         1. Run `rlstatsapi listen`
         2. Start Rocket League
         3. Join a match
-        4. No events are printed
+        4. See the error
     validations:
       required: true
 
   - type: textarea
-    id: expected_behavior
+    id: expected-behavior
     attributes:
       label: Expected behavior
       description: Describe what you expected to happen.
-      placeholder: Events should start printing once the match begins.
+      placeholder: The client should receive and print live Rocket League events.
     validations:
       required: true
 
   - type: textarea
-    id: actual_behavior
+    id: actual-behavior
     attributes:
       label: Actual behavior
       description: Describe what actually happened instead.
-      placeholder: The client stays connected but does not print any events.
+      placeholder: The client stays connected but no events are received.
     validations:
       required: true
 
   - type: input
-    id: rlstatsapi_version
+    id: rlstatsapi-version
     attributes:
       label: rlstatsapi version
+      description: What version of rlstatsapi are you running?
       placeholder: 0.1.5
     validations:
       required: true
 
+  - type: dropdown
+    id: run-mode
+    attributes:
+      label: Run mode
+      description: How were you running rlstatsapi when the bug happened?
+      options:
+        - CLI (`rlstatsapi ...`)
+        - Python package
+        - Example script
+        - Local project integration
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bug-area
+    attributes:
+      label: Affected area
+      description: Which part of the library seems to be affected?
+      options:
+        - Config discovery
+        - StatsClient connection
+        - Event parsing
+        - Typed payloads
+        - CLI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rocket-league-mode
+    attributes:
+      label: Rocket League mode
+      description: What mode were you in when the bug happened?
+      options:
+        - Training
+        - Private Match
+        - Online Match
+        - Spectating
+        - Replay
+        - Unknown
+
   - type: input
-    id: python_version
+    id: python-version
     attributes:
       label: Python version
+      description: Which Python version are you using?
       placeholder: 3.12.0
     validations:
       required: true
 
   - type: input
-    id: operating_system
+    id: os
     attributes:
-      label: Operating system
-      placeholder: Windows 11
+      label: Operating System
+      description: Which operating system are you using?
+      placeholder: Windows 11 Pro 23H2
     validations:
       required: true
 
   - type: input
-    id: packet_send_rate
+    id: packet-send-rate
     attributes:
       label: PacketSendRate
-      placeholder: 30
+      description: What PacketSendRate is set in `TAStatsAPI.ini`?
+      placeholder: 1
 
   - type: input
     id: port
     attributes:
       label: Port
+      description: What port is set in `TAStatsAPI.ini`?
       placeholder: 49123
 
   - type: textarea
-    id: logs
+    id: screenshots
     attributes:
-      label: Logs or output
-      description: Paste any relevant traceback, logs, or CLI output.
-      placeholder: Paste logs here.
+      label: Screenshots or recordings
+      description: Add screenshots, recordings, or visible error messages if available.
 
   - type: textarea
-    id: additional_context
+    id: additional-comments
     attributes:
-      label: Additional context
-      description: Anything else that may help reproduce or understand the issue.
+      label: Additional comments
+      description: Add any extra context that may help reproduce or diagnose the issue.
+
+  - type: textarea
+    id: logfile
+    attributes:
+      label: Logs or output
+      description: Paste the relevant traceback, client logs, or CLI output.
+      placeholder: |
+        Example:
+        python -m rlstatsapi listen --event GoalScored
+        
+        DEBUG rlstatsapi connecting to tcp://127.0.0.1:49123
+    validations:
+      required: true
