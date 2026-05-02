@@ -138,12 +138,14 @@ body:
     attributes:
       label: Screenshots or recordings
       description: Add screenshots, recordings, or visible error messages if available.
+      placeholder: Paste image links or describe any visible error message here.
 
   - type: textarea
     id: additional-comments
     attributes:
       label: Additional comments
       description: Add any extra context that may help reproduce or diagnose the issue.
+      placeholder: Add anything else that may help.
 
   - type: textarea
     id: logfile
