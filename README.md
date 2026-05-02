@@ -164,9 +164,18 @@ print(client.is_connected)  # True once TCP is established
 - Works for regular matches. Some fields like `MatchGuid` are only present in online/LAN contexts.
 - In current builds this endpoint may behave as a plain TCP JSON stream instead of a WebSocket upgrade. This library handles the TCP stream format.
 
+
 ## Disclaimer
 
 This project is an independent, community-made library and is **not affiliated with, endorsed by, or sponsored by Psyonix or Epic Games**.
 
 Rocket League and related trademarks are the property of their respective owners.  
 Use this library at your own risk and in compliance with Rocket League’s terms and policies.
+
+
+## Contributors
+Individuals who support the project through code, feedback, testing, documentation, or maintenance.
+
+<a href="https://github.com/manucabral/RocketLeagueStatsAPI/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=manucabral/RocketLeagueStatsAPI" />
+</a>
