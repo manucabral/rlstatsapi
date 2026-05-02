@@ -3,6 +3,7 @@
 This module handles socket lifecycle, JSON stream framing, dispatching to user
 handlers, reconnect strategy, and queue backpressure behavior.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -453,6 +454,7 @@ class StatsClient:
 
     def once(self, event_name: str, handler: _AnyCallable) -> None:
         """Register a handler that runs once and removes itself automatically."""
+
         async def wrapper(msg: EventMessage) -> None:
             self.off(event_name, wrapper)
             result = handler(msg)

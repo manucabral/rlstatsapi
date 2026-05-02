@@ -3,6 +3,7 @@
 These are lightweight transport models (not validators) used while events move
 through internal queues and user callbacks.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
