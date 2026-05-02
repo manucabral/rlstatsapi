@@ -46,16 +46,10 @@ def candidate_stats_api_paths() -> list[Path]:
     candidates: list[Path] = []
     for root in roots:
         candidates.append(
-            root
-            / "Documents"
-            / _USER_CONFIG_RELATIVE_DIR
-            / DEFAULT_STATS_API_FILENAME
+            root / "Documents" / _USER_CONFIG_RELATIVE_DIR / DEFAULT_STATS_API_FILENAME
         )
         candidates.append(
-            root
-            / "Documentos"
-            / _USER_CONFIG_RELATIVE_DIR
-            / DEFAULT_STATS_API_FILENAME
+            root / "Documentos" / _USER_CONFIG_RELATIVE_DIR / DEFAULT_STATS_API_FILENAME
         )
         candidates.append(
             root
