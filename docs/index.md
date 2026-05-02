@@ -1,28 +1,16 @@
 # Rocket League Stats API Docs
 
-Welcome to the documentation for `rlstatsapi`, a fast Python client for Rocket League Stats API events.
+`rlstatsapi` is a small Python client for reading live Rocket League Stats API
+events over a local TCP socket.
 
-## Install
+## Start here
 
-From PyPI:
-
-```bash
-pip install rlstatsapi
-```
-
-From GitHub:
-
-```bash
-pip install git+https://github.com/manucabral/RocketLeagueStatsAPI.git
-```
-
-## What you can find here
-
-- Quick integration guide
-- Rocket League exporter configuration
-- Event-by-event payload reference
-- API docs generated from source code
-- Example scripts
+- [Installation](installation.md)
+- [Quickstart](quickstart.md)
+- [Configuration](configuration.md)
+- [Recipes](recipes.md)
+- [Compatibility notes](compatibility.md)
+- [API reference](api.md)
 
 ## Demos
 
@@ -38,4 +26,4 @@ pip install git+https://github.com/manucabral/RocketLeagueStatsAPI.git
 
 - PyPI: [rlstatsapi](https://pypi.org/project/rlstatsapi/)
 - GitHub: [manucabral/RocketLeagueStatsAPI](https://github.com/manucabral/RocketLeagueStatsAPI)
-- Main README: [README](https://github.com/manucabral/RocketLeagueStatsAPI/blob/main/README.md)
+- Changelog: [CHANGELOG.md](https://github.com/manucabral/RocketLeagueStatsAPI/blob/main/CHANGELOG.md)

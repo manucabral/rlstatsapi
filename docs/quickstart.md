@@ -18,6 +18,20 @@ asyncio.run(main())
 
 This prints incoming events from the local Rocket League exporter.
 
+## Filter specific events
+
+```python
+async with StatsClient() as client:
+    async for message in client.events("GoalScored", "MatchEnded"):
+        print(message.event, message.data)
+```
+
+You can also register one handler for several events:
+
+```python
+client.on_many(["MatchCreated", "MatchEnded"], lambda msg: print(msg.event))
+```
+
 ## Typed payload pattern (Pylance-friendly)
 
 ```python
@@ -36,3 +50,10 @@ Why this pattern:
 - `StatsClient.on(...)` handlers receive `EventMessage`
 - `cast_event_data(...)` narrows to the event-specific payload type
 - no runtime validation overhead
+
+## CLI quick checks
+
+```bash
+rlstatsapi status
+rlstatsapi listen --event GoalScored
+```
