@@ -29,16 +29,24 @@ pip install git+https://github.com/manucabral/RocketLeagueStatsAPI.git
 
 ## Rocket League setup
 
-Before launching Rocket League, edit:
+You can enable Stats API automatically:
 
-`<Install Dir>\TAGame\Config\DefaultStatsAPI.ini`
+```python
+from rlstatsapi import configure_stats_api
+
+configure_stats_api(enabled=True, port=49123, packet_send_rate=30)
+```
+
+Or manually by editing:
+
+`Documents\My Games\Rocket League\TAGame\Config\TAStatsAPI.ini`
 
 Use at least:
 
-- `PacketSendRate=30` (any value `> 0` enables the exporter)
+- `PacketSendRate=1` (any value `> 0` enables the exporter)
 - `Port=49123`
 
-Restart the game after changing the file.
+In both cases, restart Rocket League after changing the config file.
 
 ## Quick start
 
@@ -160,6 +168,9 @@ print(client.is_connected)  # True once TCP is established
 
 **Async iteration:**
 `events()` async iterator yielding `EventMessage`
+
+**Config helpers:**
+`find_stats_api_config()` · `get_stats_api_status()` · `set_stats_api_enabled()` · `set_stats_api_port()` · `configure_stats_api()`
 
 **Types:**
 `EventName` · `TypedEventMessage[T]` · `KnownEventMessage` · per-event payload types (`GoalScoredPayload`, `UpdateStatePayload`, …)
