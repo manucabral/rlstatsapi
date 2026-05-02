@@ -169,6 +169,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
+site/
+rpc/
 
 # mypy
 .mypy_cache/
@@ -220,5 +222,4 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-events_log.txt
-events_log2.txt
+events_log*.txt
