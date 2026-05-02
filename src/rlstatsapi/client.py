@@ -13,9 +13,10 @@ import json
 import logging
 import random
 from collections import defaultdict
-from typing import Any, AsyncIterator, Awaitable, Callable, Literal, overload
+from typing import Any, AsyncIterator, Awaitable, Callable, Iterable, Literal, overload
 
-from .models import EventMessage
+from .models import ClientMetrics, EventMessage, MatchStateSnapshot
+from .state import MatchStateTracker
 from .types import (
     BallHitPayload,
     ClockUpdatedSecondsPayload,
@@ -55,11 +56,12 @@ class StatsClient:
         reconnect: bool = True,
         reconnect_delay: float = 0.5,
         max_reconnect_delay: float = 30.0,
-        max_reconnect_attempts: int | None = 5,
+        max_reconnect_attempts: int | None = None,
         include_raw: bool = False,
         queue_size: int = 2048,
         overflow: Literal["block", "drop", "raise"] = "block",
         connect_timeout: float = 5.0,
+        drain_on_disconnect: bool = False,
     ) -> None:
         self.host = host
         self.port = port
@@ -70,6 +72,7 @@ class StatsClient:
         self.include_raw = include_raw
         self.connect_timeout = connect_timeout
         self.overflow = overflow
+        self.drain_on_disconnect = drain_on_disconnect
 
         self._queue: asyncio.Queue[EventMessage] = asyncio.Queue(maxsize=queue_size)
         self._handlers_by_event: dict[str, list[_AnyCallable]] = defaultdict(list)
@@ -84,6 +87,10 @@ class StatsClient:
         self._reader_task: asyncio.Task[None] | None = None
         self._stopping = False
         self._connected = False
+        self._permanently_failed = False
+        self._last_error: Exception | None = None
+        self._metrics = ClientMetrics()
+        self._state_tracker = MatchStateTracker()
 
     @property
     def is_connected(self) -> bool:
@@ -91,6 +98,26 @@ class StatsClient:
         Returns True if the client is currently connected to the Stats API.
         """
         return self._connected
+
+    @property
+    def metrics(self) -> ClientMetrics:
+        """Return read-only-style counters for throughput and reconnect behavior."""
+        return self._metrics
+
+    @property
+    def state(self) -> MatchStateSnapshot:
+        """Return the latest convenience match snapshot derived from recent events."""
+        return self._state_tracker.snapshot
+
+    @property
+    def last_error(self) -> Exception | None:
+        """Return the latest connection or reader error seen by the background task."""
+        return self._last_error
+
+    @property
+    def permanently_failed(self) -> bool:
+        """Return True when reconnect attempts were exhausted."""
+        return self._permanently_failed
 
     async def __aenter__(self) -> StatsClient:
         await self.connect()
@@ -105,6 +132,8 @@ class StatsClient:
             return
 
         self._stopping = False
+        self._permanently_failed = False
+        self._last_error = None
         self._reader_task = asyncio.create_task(self._run(), name="rlstatsapi-reader")
         self._logger.debug("reader task started")
 
@@ -127,6 +156,8 @@ class StatsClient:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
             self._reader_task = None
+        if self.drain_on_disconnect:
+            self.clear_queue()
         self._logger.debug("disconnected")
 
     def on_connect(self, handler: _SimpleHandler) -> None:
@@ -440,6 +471,11 @@ class StatsClient:
         """Register a handler that runs for every incoming event."""
         self._handlers_any.append(handler)
 
+    def on_many(self, event_names: Iterable[str], handler: Handler) -> None:
+        """Register the same handler for several event names in one call."""
+        for event_name in event_names:
+            self._handlers_by_event[event_name].append(handler)
+
     def off(self, event_name: str, handler: _AnyCallable) -> None:
         """Unregister one handler for a specific event if present."""
         handlers = self._handlers_by_event.get(event_name)
@@ -451,6 +487,12 @@ class StatsClient:
         """Unregister a global handler registered with on_any."""
         with contextlib.suppress(ValueError):
             self._handlers_any.remove(handler)
+
+    def clear_queue(self) -> None:
+        """Drop any queued events that have not been consumed yet."""
+        while not self._queue.empty():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._queue.get_nowait()
 
     def once(self, event_name: str, handler: _AnyCallable) -> None:
         """Register a handler that runs once and removes itself automatically."""
@@ -632,10 +674,13 @@ class StatsClient:
         """Typed helper for registering StatfeedEvent handlers."""
         self._handlers_by_event["StatfeedEvent"].append(handler)
 
-    async def events(self) -> AsyncIterator[EventMessage]:
-        """Async iterator that yields incoming events from the Stats API."""
+    async def events(self, *event_names: str) -> AsyncIterator[EventMessage]:
+        """Async iterator that yields incoming events, optionally filtered by name."""
+        filters = set(event_names)
         while True:
-            yield await self._queue.get()
+            message = await self._queue.get()
+            if not filters or message.event in filters:
+                yield message
 
     async def _run(self) -> None:
         """Main loop to manage connection and reading from the Stats API."""
@@ -656,6 +701,8 @@ class StatsClient:
                 self._logger.debug("reader task cancelled")
                 raise
             except Exception as exc:
+                self._last_error = exc
+                self._metrics.connection_failures += 1
                 self._logger.debug("connection/read error: %s", exc)
                 if not self.reconnect or self._stopping:
                     self._logger.debug(
@@ -663,10 +710,12 @@ class StatsClient:
                     )
                     return
                 attempt += 1
+                self._metrics.reconnect_count += 1
                 if (
                     self.max_reconnect_attempts is not None
                     and attempt > self.max_reconnect_attempts
                 ):
+                    self._permanently_failed = True
                     self._logger.debug(
                         "max reconnect attempts (%d) reached",
                         self.max_reconnect_attempts,
@@ -725,17 +774,24 @@ class StatsClient:
                     self._logger.debug("ignored invalid message (json/envelope)")
                     continue
 
+                self._metrics.received_events += 1
+                self._state_tracker.update(message)
+
                 if self.overflow == "block":
                     await self._queue.put(message)
+                    self._metrics.queued_events += 1
                 elif self.overflow == "drop":
                     try:
                         self._queue.put_nowait(message)
+                        self._metrics.queued_events += 1
                     except asyncio.QueueFull:
+                        self._metrics.dropped_events += 1
                         self._logger.warning(
                             "queue full, dropping %s event", message.event
                         )
                 else:  # "raise" queuefull propagates and kills the connection
                     self._queue.put_nowait(message)
+                    self._metrics.queued_events += 1
 
                 await self._dispatch(message)
 
@@ -752,6 +808,7 @@ class StatsClient:
                 if inspect.isawaitable(result):
                     await result
             except Exception as exc:
+                self._metrics.handler_errors += 1
                 if self._error_handlers:
                     for error_handler in list(self._error_handlers):
                         with contextlib.suppress(Exception):
