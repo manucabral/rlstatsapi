@@ -9,6 +9,18 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 from .client import StatsClient
+from .config import (
+    DEFAULT_PACKET_SEND_RATE,
+    DEFAULT_STATS_API_FILENAME,
+    DEFAULT_STATS_API_PORT,
+    StatsAPIConfigStatus,
+    candidate_stats_api_paths,
+    configure_stats_api,
+    find_stats_api_config,
+    get_stats_api_status,
+    set_stats_api_enabled,
+    set_stats_api_port,
+)
 from .events import KNOWN_EVENTS
 from .models import EventMessage
 from .types import (
@@ -45,8 +57,18 @@ except PackageNotFoundError:
 __all__ = [
     "__version__",
     "StatsClient",
+    "StatsAPIConfigStatus",
     "EventMessage",
     "KNOWN_EVENTS",
+    "DEFAULT_PACKET_SEND_RATE",
+    "DEFAULT_STATS_API_FILENAME",
+    "DEFAULT_STATS_API_PORT",
+    "candidate_stats_api_paths",
+    "find_stats_api_config",
+    "get_stats_api_status",
+    "set_stats_api_enabled",
+    "set_stats_api_port",
+    "configure_stats_api",
     "EventName",
     "TypedEventMessage",
     "KnownEventMessage",
