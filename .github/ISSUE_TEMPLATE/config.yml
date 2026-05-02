@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://manucabral.github.io/RocketLeagueStatsAPI/
+    about: Check the docs before opening a question-based issue.

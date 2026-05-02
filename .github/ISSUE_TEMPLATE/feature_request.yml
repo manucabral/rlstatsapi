@@ -1,0 +1,60 @@
+name: Feature request
+description: Suggest an improvement for rlstatsapi
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Please share enough context so the request can be evaluated and implemented clearly.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the feature or improvement you would like to see.
+      placeholder: Add a CLI command to export recent events as JSON lines.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Problem or motivation
+      description: What problem would this solve? Why would it be useful?
+      placeholder: I want to debug the event stream without writing a Python script every time.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: Describe the change you would like.
+      placeholder: Add `rlstatsapi export --format jsonl`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternative approaches you considered.
+
+  - type: textarea
+    id: example_usage
+    attributes:
+      label: Example usage
+      description: If relevant, show how the API, CLI, or docs could look.
+      render: python
+      placeholder: |
+        from rlstatsapi import StatsClient
+        
+        # example
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Anything else that would help evaluate the request.
