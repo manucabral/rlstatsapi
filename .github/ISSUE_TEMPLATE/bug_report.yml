@@ -1,8 +1,7 @@
 name: Bug report
 description: Report a problem with rlstatsapi
 title: "[Bug] "
-labels:
-  - bug
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
@@ -88,7 +87,7 @@ body:
     attributes:
       label: Logs or output
       description: Paste any relevant traceback, logs, or CLI output.
-      render: text
+      render: shell
 
   - type: textarea
     id: additional_context

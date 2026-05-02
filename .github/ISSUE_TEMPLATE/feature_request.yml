@@ -1,8 +1,7 @@
 name: Feature request
 description: Suggest an improvement for rlstatsapi
 title: "[Feature] "
-labels:
-  - enhancement
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
