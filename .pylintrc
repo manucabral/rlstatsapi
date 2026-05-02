@@ -1,5 +1,6 @@
 [MASTER]
 ignore=build,dist
+ignored-modules=pytest
 
 [MESSAGES CONTROL]
 disable=
