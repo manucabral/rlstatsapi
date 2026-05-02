@@ -43,6 +43,8 @@ nav:
   - Installation: installation.md
   - Quickstart: quickstart.md
   - Configuration: configuration.md
+  - Recipes: recipes.md
+  - Compatibility: compatibility.md
   - Events: events.md
   - API Reference: api.md
   - Examples: examples.md
