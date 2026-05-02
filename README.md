@@ -15,7 +15,7 @@
 
 ## Install
 
-From PyPI:
+From [PyPI](https://pypi.org/project/rlstatsapi/):
 
 ```bash
 pip install rlstatsapi
