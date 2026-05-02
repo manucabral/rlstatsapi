@@ -63,12 +63,28 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Demos
+
+### All events
+
+![All events demo](docs/videos/allevents.gif)
+
+### UI
+
+![UI demo](docs/videos/ui.gif)
+
 ## CLI
 
 ```bash
 rlstatsapi status
 rlstatsapi enable --port 49123 --rate 30
 rlstatsapi listen --event GoalScored
+```
+
+You can also listen to multiple events:
+
+```bash
+rlstatsapi listen --event GoalScored --event MatchEnded --event MatchCreated
 ```
 
 ## Typing
@@ -85,6 +101,12 @@ def on_goal(msg: EventMessage) -> None:
     print(data.get("Scorer", {}).get("Name"))
 ```
 
+## More
+
+- Full docs: [manucabral.github.io/RocketLeagueStatsAPI](https://manucabral.github.io/RocketLeagueStatsAPI/)
+- Examples: [examples/](examples)
+- Release history: [CHANGELOG.md](CHANGELOG.md)
+
 ## Notes
 
 - In current Rocket League builds this endpoint behaves like a TCP JSON stream in practice.
@@ -96,3 +118,9 @@ This project is an independent, community-made library and is **not affiliated w
 
 Rocket League and related trademarks are the property of their respective owners.  
 Use this library at your own risk and in compliance with Rocket League’s terms and policies.
+
+## Contributors
+
+<a href="https://github.com/manucabral/RocketLeagueStatsAPI/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=manucabral/RocketLeagueStatsAPI" alt="Contributors" />
+</a>
