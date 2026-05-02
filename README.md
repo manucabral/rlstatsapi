@@ -1,3 +1,8 @@
+
+
+<img width="600" alt="rlstatsapi-logo" src="https://github.com/manucabral/RocketLeagueStatsAPI/blob/main/docs/assets/social-preview.png" />
+
+
 # Rocket League Stats API
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![PyPI version](https://img.shields.io/pypi/v/rlstatsapi.svg)](https://pypi.org/project/rlstatsapi/) [![Pylint](https://github.com/manucabral/RocketLeagueStatsAPI/actions/workflows/pylint.yml/badge.svg)](https://github.com/manucabral/RocketLeagueStatsAPI/actions/workflows/pylint.yml)
 ![Downloads](https://img.shields.io/pypi/dm/rlstatsapi)
