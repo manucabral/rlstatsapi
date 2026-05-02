@@ -22,7 +22,8 @@ from .config import (
     set_stats_api_port,
 )
 from .events import KNOWN_EVENTS
-from .models import EventMessage
+from .models import ClientMetrics, EventMessage, MatchStateSnapshot
+from .state import MatchStateTracker
 from .types import (
     BallHitPayload,
     ClockUpdatedSecondsPayload,
@@ -59,6 +60,9 @@ __all__ = [
     "StatsClient",
     "StatsAPIConfigStatus",
     "EventMessage",
+    "ClientMetrics",
+    "MatchStateSnapshot",
+    "MatchStateTracker",
     "KNOWN_EVENTS",
     "DEFAULT_PACKET_SEND_RATE",
     "DEFAULT_STATS_API_FILENAME",
