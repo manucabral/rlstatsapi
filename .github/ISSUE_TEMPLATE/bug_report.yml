@@ -124,14 +124,14 @@ body:
     attributes:
       label: PacketSendRate
       description: What PacketSendRate is set in `TAStatsAPI.ini`?
-      placeholder: 1
+      placeholder: "1"
 
   - type: input
     id: port
     attributes:
       label: Port
       description: What port is set in `TAStatsAPI.ini`?
-      placeholder: 49123
+      placeholder: "49123"
 
   - type: textarea
     id: screenshots
