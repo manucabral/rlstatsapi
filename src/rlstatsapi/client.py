@@ -64,6 +64,21 @@ class StatsClient:
         connect_timeout: float = 5.0,
         drain_on_disconnect: bool = False,
     ) -> None:
+        """Configure the client. Does not connect until ``connect()`` or async context manager entry.
+
+        Args:
+            host: Stats API host address.
+            port: Stats API TCP port.
+            reconnect: Whether to reconnect automatically on connection loss.
+            reconnect_delay: Initial delay in seconds before the first reconnect attempt.
+            max_reconnect_delay: Upper bound for exponential backoff delay.
+            max_reconnect_attempts: Stop reconnecting after this many failures. None means unlimited.
+            include_raw: Attach the original JSON string to each ``EventMessage.raw``.
+            queue_size: Max events buffered in the internal queue.
+            overflow: Queue-full behavior — ``"block"`` waits, ``"drop"`` discards, ``"raise"`` kills the connection.
+            connect_timeout: Seconds to wait for TCP handshake before raising.
+            drain_on_disconnect: Clear the queue when the session ends.
+        """
         if reconnect_delay <= 0:
             raise ValueError("reconnect_delay must be positive")
         self.host = host
@@ -123,13 +138,16 @@ class StatsClient:
         return self._permanently_failed
 
     async def __aenter__(self) -> StatsClient:
+        """Connect and return self for use as an async context manager."""
         await self.connect()
         return self
 
     async def __aexit__(self, *_: object) -> None:
+        """Disconnect when leaving the async context manager."""
         await self.disconnect()
 
     async def connect(self) -> None:
+        """Start the background reader task and begin connecting. No-op if already running."""
         if self._reader_task and not self._reader_task.done():
             self._logger.debug("connect() ignored: reader already running")
             return
@@ -465,7 +483,6 @@ class StatsClient:
             def decorator(h: _AnyCallable) -> _AnyCallable:
                 @functools.wraps(h)
                 def wrapper(*args: Any, **kwargs: Any) -> Any:
-                    """Wrapper to preserve function signature and allow both sync and async handlers in decorator form."""
                     return h(*args, **kwargs)
 
                 self._handlers_by_event[event_name].append(wrapper)

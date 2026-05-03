@@ -26,6 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the top-level argument parser with all subcommands."""
     parser = argparse.ArgumentParser(prog="rlstatsapi")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -87,12 +88,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_status(args: argparse.Namespace) -> int:
+    """Print the current TAStatsAPI.ini config as JSON."""
     status = get_stats_api_status(args.path)
     print(json.dumps(asdict(status), indent=2))
     return 0
 
 
 def _run_enable(args: argparse.Namespace) -> int:
+    """Enable the Stats API exporter in TAStatsAPI.ini and print the result."""
     status = configure_stats_api(
         enabled=True,
         port=args.port,
@@ -105,6 +108,7 @@ def _run_enable(args: argparse.Namespace) -> int:
 
 
 def _run_disable(args: argparse.Namespace) -> int:
+    """Disable the Stats API exporter in TAStatsAPI.ini and print the result."""
     status = configure_stats_api(
         enabled=False,
         port=args.port,
@@ -117,10 +121,12 @@ def _run_disable(args: argparse.Namespace) -> int:
 
 
 def _run_listen(args: argparse.Namespace) -> int:
+    """Bridge the sync CLI entry point into the async ``_listen`` coroutine."""
     return asyncio.run(_listen(args))
 
 
 async def _listen(args: argparse.Namespace) -> int:
+    """Connect to the local Stats API and stream events to stdout until Ctrl+C."""
     async with StatsClient(
         host=args.host,
         port=args.port,
