@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import inspect
 import json
 import logging
@@ -63,6 +64,8 @@ class StatsClient:
         connect_timeout: float = 5.0,
         drain_on_disconnect: bool = False,
     ) -> None:
+        if reconnect_delay <= 0:
+            raise ValueError("reconnect_delay must be positive")
         self.host = host
         self.port = port
         self.reconnect = reconnect
@@ -145,7 +148,7 @@ class StatsClient:
         self._logger.debug("disconnect requested")
 
         if self._writer is not None:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(OSError, asyncio.TimeoutError):
                 self._writer.close()
                 await self._writer.wait_closed()
             self._writer = None
@@ -460,8 +463,13 @@ class StatsClient:
         if handler is None:
 
             def decorator(h: _AnyCallable) -> _AnyCallable:
-                self._handlers_by_event[event_name].append(h)
-                return h
+                @functools.wraps(h)
+                def wrapper(*args: Any, **kwargs: Any) -> Any:
+                    """Wrapper to preserve function signature and allow both sync and async handlers in decorator form."""
+                    return h(*args, **kwargs)
+
+                self._handlers_by_event[event_name].append(wrapper)
+                return wrapper
 
             return decorator
         self._handlers_by_event[event_name].append(handler)
@@ -490,9 +498,11 @@ class StatsClient:
 
     def clear_queue(self) -> None:
         """Drop any queued events that have not been consumed yet."""
-        while not self._queue.empty():
-            with contextlib.suppress(asyncio.QueueEmpty):
+        while True:
+            try:
                 self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
     def once(self, event_name: str, handler: _AnyCallable) -> None:
         """Register a handler that runs once and removes itself automatically."""
@@ -732,7 +742,7 @@ class StatsClient:
                     self._connected = False
                     await self._fire_simple(self._on_disconnect_handlers)
                 if self._writer is not None:
-                    with contextlib.suppress(Exception):
+                    with contextlib.suppress(OSError, asyncio.TimeoutError):
                         self._writer.close()
                         await self._writer.wait_closed()
                     self._writer = None
@@ -749,14 +759,17 @@ class StatsClient:
             chunk = await reader.read(4096)
             if not chunk:
                 raise ConnectionAbortedError("Socket closed by peer")
-            buffer += chunk.decode("utf-8", errors="ignore")
+            decoded_chunk = chunk.decode("utf-8", errors="replace")
+            if "�" in decoded_chunk:
+                self._logger.warning("received invalid UTF-8 bytes; replaced with U+FFFD")
+            buffer += decoded_chunk
 
             while True:
                 lstripped = buffer.lstrip()
                 if not lstripped:
                     buffer = ""
                     break
-                if lstripped is not buffer:
+                if lstripped != buffer:
                     buffer = lstripped
 
                 try:
@@ -811,20 +824,29 @@ class StatsClient:
                 self._metrics.handler_errors += 1
                 if self._error_handlers:
                     for error_handler in list(self._error_handlers):
-                        with contextlib.suppress(Exception):
+                        try:
                             r = error_handler(message.event, exc)
                             if inspect.isawaitable(r):
                                 await r
+                        except Exception as err_exc:
+                            self._logger.error(
+                                "error handler itself raised: %s", err_exc
+                            )
                 else:
                     self._logger.error("handler error for %s: %s", message.event, exc)
 
     async def _fire_simple(self, handlers: list[_SimpleHandler]) -> None:
         """Run connection lifecycle callbacks and await async ones when needed."""
         for handler in list(handlers):
-            with contextlib.suppress(Exception):
+            try:
                 result = handler()
                 if inspect.isawaitable(result):
                     await result
+            except Exception as exc:
+                self._logger.error("lifecycle handler error: %s", exc)
+
+
+_MAX_JSON_FIELD_BYTES = 1 << 20  # 1 MiB
 
 
 def _parse_message_obj(
@@ -836,6 +858,8 @@ def _parse_message_obj(
     event = decoded.get("Event")
     data = decoded.get("Data")
     if isinstance(data, str):
+        if len(data) > _MAX_JSON_FIELD_BYTES:
+            return None
         try:
             data = json.loads(data)
         except json.JSONDecodeError:
