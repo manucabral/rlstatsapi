@@ -8,7 +8,7 @@ without forcing users to rebuild the same state cache in every script.
 
 from __future__ import annotations
 
-from .models import EventMessage, MatchStateSnapshot
+from .models import EventMessage, MatchStateSnapshot, PlayerSnapshot
 
 
 class MatchStateTracker:
@@ -64,6 +64,7 @@ class MatchStateTracker:
             return
 
         self._apply_teams(snapshot, game.get("Teams", []))
+        self._apply_players(snapshot, message.data.get("Players", []), game)
 
         time_seconds = game.get("TimeSeconds")
         if isinstance(time_seconds, int):
@@ -95,6 +96,56 @@ class MatchStateTracker:
                 snapshot.blue_score = score
             if team_num == 1 and isinstance(score, int):
                 snapshot.orange_score = score
+
+    def _apply_players(
+        self,
+        snapshot: MatchStateSnapshot,
+        players: object,
+        game: dict,
+    ) -> None:
+        """Rebuild the players list and resolve target_player from UpdateState."""
+        if not isinstance(players, list):
+            snapshot.players = []
+            snapshot.target_player = None
+            return
+
+        result: list[PlayerSnapshot] = []
+        for p in players:
+            if not isinstance(p, dict):
+                continue
+            name = p.get("Name")
+            shortcut = p.get("Shortcut")
+            team_num = p.get("TeamNum")
+            if not isinstance(name, str) or not isinstance(shortcut, int):
+                continue
+            result.append(
+                PlayerSnapshot(
+                    name=name,
+                    shortcut=shortcut,
+                    team_num=team_num if isinstance(team_num, int) else 0,
+                    score=p.get("Score") or 0,
+                    goals=p.get("Goals") or 0,
+                    assists=p.get("Assists") or 0,
+                    saves=p.get("Saves") or 0,
+                    shots=p.get("Shots") or 0,
+                    boost=p.get("Boost") or 0,
+                    speed=float(p.get("Speed") or 0.0),
+                    is_demolished=bool(p.get("bDemolished", False)),
+                )
+            )
+        snapshot.players = result
+
+        target_player: PlayerSnapshot | None = None
+        if game.get("bHasTarget"):
+            target = game.get("Target")
+            if isinstance(target, dict):
+                target_shortcut = target.get("Shortcut")
+                if isinstance(target_shortcut, int):
+                    for player in result:
+                        if player.shortcut == target_shortcut:
+                            target_player = player
+                            break
+        snapshot.target_player = target_player
 
     def _apply_goal_scored(
         self,
