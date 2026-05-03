@@ -75,7 +75,7 @@ class StatsClient:
             max_reconnect_attempts: Stop reconnecting after this many failures. None means unlimited.
             include_raw: Attach the original JSON string to each ``EventMessage.raw``.
             queue_size: Max events buffered in the internal queue.
-            overflow: Queue-full behavior — ``"block"`` waits, ``"drop"`` discards, ``"raise"`` kills the connection.
+            overflow: Queue-full behavior ``"block"`` waits, ``"drop"`` discards, ``"raise"`` kills the connection.
             connect_timeout: Seconds to wait for TCP handshake before raising.
             drain_on_disconnect: Clear the queue when the session ends.
         """
