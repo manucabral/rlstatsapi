@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.6
+
+### Added
+- `StatsClient.wait_for(event_name, timeout=None)` - await the next occurrence of an event
+- `PlayerSnapshot` dataclass with per-player stats (name, team, score, goals, assists, saves, shots, boost, speed, is_demolished)
+- `MatchStateSnapshot.players` - list of all players from the latest `UpdateState`
+- `MatchStateSnapshot.target_player` - the local/spectated player, resolved by `Game.Target.Shortcut`
+- `ClientMetrics.reset()` - reset all counters and refresh `started_at`
+- `ClientMetrics.started_at` - datetime the client (or last reset) was initialized
+- `ConnectionState` enum with `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `FAILED`
+- `StatsClient.connection_state` property exposing granular connection lifecycle state
+- `StatsClient(handler_timeout=...)` - cancels slow async handlers after N seconds
+- `disconnect(timeout=5.0)` - graceful shutdown with configurable wait timeout
+- `ConnectionState` and `PlayerSnapshot` exported from the top-level `rlstatsapi` package
+
+### Changed
+- `on_handler_error` callback signature changed from `(event_name: str, exc)` to `(msg: EventMessage, exc, handler)` for full context
+
+### Improved
+- Docs: `examples.md` updated to list all 9 example scripts
+- Docs: `configuration.md` now shows `disable` and `status` CLI commands
+- Docs: `recipes.md` removed reference to non-existent `test.py`
+
 ## 0.1.5
 
 ### Added
