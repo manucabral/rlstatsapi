@@ -64,7 +64,9 @@ class StatsClient:
         connect_timeout: float = 5.0,
         drain_on_disconnect: bool = False,
     ) -> None:
-        """Configure the client. Does not connect until ``connect()`` or async context manager entry.
+        """Configure the client.
+
+        Does not connect until ``connect()`` or async context manager entry.
 
         Args:
             host: Stats API host address.
@@ -72,10 +74,12 @@ class StatsClient:
             reconnect: Whether to reconnect automatically on connection loss.
             reconnect_delay: Initial delay in seconds before the first reconnect attempt.
             max_reconnect_delay: Upper bound for exponential backoff delay.
-            max_reconnect_attempts: Stop reconnecting after this many failures. None means unlimited.
+            max_reconnect_attempts: Stop reconnecting after this many failures.
+                None means unlimited.
             include_raw: Attach the original JSON string to each ``EventMessage.raw``.
             queue_size: Max events buffered in the internal queue.
-            overflow: Queue-full behavior ``"block"`` waits, ``"drop"`` discards, ``"raise"`` kills the connection.
+            overflow: Queue-full behavior ``"block"`` waits, ``"drop"`` discards,
+                ``"raise"`` kills the connection.
             connect_timeout: Seconds to wait for TCP handshake before raising.
             drain_on_disconnect: Clear the queue when the session ends.
         """
