@@ -778,7 +778,9 @@ class StatsClient:
                 raise ConnectionAbortedError("Socket closed by peer")
             decoded_chunk = chunk.decode("utf-8", errors="replace")
             if "�" in decoded_chunk:
-                self._logger.warning("received invalid UTF-8 bytes; replaced with U+FFFD")
+                self._logger.warning(
+                    "received invalid UTF-8 bytes; replaced with U+FFFD"
+                )
             buffer += decoded_chunk
 
             while True:

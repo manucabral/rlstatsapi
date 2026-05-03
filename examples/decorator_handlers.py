@@ -2,7 +2,12 @@
 
 import asyncio
 
-from rlstatsapi import StatsClient, TypedEventMessage, GoalScoredPayload, StatfeedEventPayload
+from rlstatsapi import (
+    StatsClient,
+    TypedEventMessage,
+    GoalScoredPayload,
+    StatfeedEventPayload,
+)
 
 client = StatsClient()
 

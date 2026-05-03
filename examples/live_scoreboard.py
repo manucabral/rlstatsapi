@@ -10,7 +10,7 @@ async def main() -> None:
 
     def on_update(msg: TypedEventMessage[UpdateStatePayload]) -> None:
         """
-        In this case we used client.state to get the current state snapshot, 
+        In this case we used client.state to get the current state snapshot,
         but you can also use the msg.data payload which contains the same information for this event.
         """
         s = client.state
@@ -19,7 +19,9 @@ async def main() -> None:
         mins, secs = divmod(s.time_seconds or 0, 60)
         overtime = " OT" if s.overtime else ""
         replay = " [REPLAY]" if s.replay_active else ""
-        print(f"Blue {blue} - {orange} Orange  |  {mins:02d}:{secs:02d}{overtime}{replay}")
+        print(
+            f"Blue {blue} - {orange} Orange  |  {mins:02d}:{secs:02d}{overtime}{replay}"
+        )
 
     client.on_update_state(on_update)
 

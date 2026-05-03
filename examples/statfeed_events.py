@@ -26,7 +26,9 @@ async def main() -> None:
         secondary_target = msg.data.get("SecondaryTarget", {})
 
         actor = main_target.get("Name", "?") if isinstance(main_target, dict) else "?"
-        victim = secondary_target.get("Name") if isinstance(secondary_target, dict) else None
+        victim = (
+            secondary_target.get("Name") if isinstance(secondary_target, dict) else None
+        )
 
         icon = ICONS.get(event_type, "•")
         line = f"{icon}  {event_type}: {actor}"
