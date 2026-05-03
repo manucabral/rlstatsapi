@@ -48,7 +48,7 @@ _ErrorHandler = Callable[[str, Exception], Awaitable[None] | None]
 
 
 class StatsClient:
-    """High-level event client for Rocket League Stats API."""
+    """Event client for Rocket League Stats API."""
 
     def __init__(
         self,
