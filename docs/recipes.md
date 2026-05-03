@@ -38,12 +38,11 @@ async def main() -> None:
 
 ## Write all changed payloads to a file
 
-Use:
+```bash
+python examples/all_events_to_txt.py
+```
 
-- `python test.py`
-- or `python examples/all_events_to_txt.py`
-
-Both examples keep a per-event snapshot and only write when the payload changes.
+Keeps a per-event snapshot and only writes when the payload changes.
 
 ## Keep your client port in sync with the config file
 

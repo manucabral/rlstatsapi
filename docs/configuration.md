@@ -12,6 +12,8 @@ Or from the CLI:
 
 ```bash
 rlstatsapi enable --port 49123 --rate 30
+rlstatsapi disable
+rlstatsapi status
 ```
 
 Or manually by editing:
