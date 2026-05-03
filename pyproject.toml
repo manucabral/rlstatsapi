@@ -28,7 +28,7 @@ Repository = "https://github.com/manucabral/RocketLeagueStatsAPI"
 rlstatsapi = "rlstatsapi.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "black"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
