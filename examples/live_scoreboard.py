@@ -8,10 +8,9 @@ from rlstatsapi import StatsClient, TypedEventMessage, UpdateStatePayload
 async def main() -> None:
     client = StatsClient()
 
-    def on_update(msg: TypedEventMessage[UpdateStatePayload]) -> None:
+    def on_update(_msg: TypedEventMessage[UpdateStatePayload]) -> None:
         """
-        In this case we used client.state to get the current state snapshot,
-        but you can also use the msg.data payload which contains the same information for this event.
+        Use client.state for current snapshot; msg.data holds same info for this event.
         """
         s = client.state
         blue = s.blue_score if s.blue_score is not None else "-"
