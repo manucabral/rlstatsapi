@@ -8,7 +8,7 @@ helpers so consumers can import from `rlstatsapi` directly.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
-from .client import StatsClient
+from .client import ConnectionState, StatsClient
 from .config import (
     DEFAULT_PACKET_SEND_RATE,
     DEFAULT_STATS_API_FILENAME,
@@ -22,7 +22,7 @@ from .config import (
     set_stats_api_port,
 )
 from .events import KNOWN_EVENTS
-from .models import ClientMetrics, EventMessage, MatchStateSnapshot
+from .models import ClientMetrics, EventMessage, MatchStateSnapshot, PlayerSnapshot
 from .state import MatchStateTracker
 from .types import (
     BallHitPayload,
@@ -58,10 +58,12 @@ except PackageNotFoundError:
 __all__ = [
     "__version__",
     "StatsClient",
+    "ConnectionState",
     "StatsAPIConfigStatus",
     "EventMessage",
     "ClientMetrics",
     "MatchStateSnapshot",
+    "PlayerSnapshot",
     "MatchStateTracker",
     "KNOWN_EVENTS",
     "DEFAULT_PACKET_SEND_RATE",
