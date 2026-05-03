@@ -1,4 +1,4 @@
-"""Tests for DefaultStatsAPI.ini helpers."""
+"""Tests for TAStatsAPI.ini helpers."""
 
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ def _write_config(path: Path, text: str) -> None:
 
 
 def test_find_stats_api_config_explicit_path(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "PacketSendRate=30\nPort=49123\n")
     assert find_stats_api_config(config_path) == config_path.resolve()
 
 
 def test_get_stats_api_status_reads_values(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "PacketSendRate=30\nPort=5000\n")
 
     status = get_stats_api_status(config_path)
@@ -39,7 +39,7 @@ def test_get_stats_api_status_reads_values(tmp_path: Path) -> None:
 
 
 def test_get_stats_api_status_missing_keys(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "[TAGame.MatchStatsExporter_TA]\n")
 
     status = get_stats_api_status(config_path)
@@ -51,7 +51,7 @@ def test_get_stats_api_status_missing_keys(tmp_path: Path) -> None:
 
 
 def test_set_stats_api_enabled_true_writes_positive_rate(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "Port=49123\nPacketSendRate=0\n")
 
     status = set_stats_api_enabled(True, packet_send_rate=45, path=config_path)
@@ -62,7 +62,7 @@ def test_set_stats_api_enabled_true_writes_positive_rate(tmp_path: Path) -> None
 
 
 def test_set_stats_api_enabled_false_writes_zero(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "PacketSendRate=30\nPort=49123\n")
 
     status = set_stats_api_enabled(False, path=config_path)
@@ -73,7 +73,7 @@ def test_set_stats_api_enabled_false_writes_zero(tmp_path: Path) -> None:
 
 
 def test_set_stats_api_port_preserves_other_content(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     original = (
         "; comment\n"
         "[TAGame.MatchStatsExporter_TA]\n"
@@ -92,7 +92,7 @@ def test_set_stats_api_port_preserves_other_content(tmp_path: Path) -> None:
 
 
 def test_configure_stats_api_writes_both_keys(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "PacketSendRate=0\n")
 
     status = configure_stats_api(
@@ -108,7 +108,7 @@ def test_configure_stats_api_writes_both_keys(tmp_path: Path) -> None:
 
 
 def test_invalid_packet_send_rate_raises(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "PacketSendRate=0\nPort=49123\n")
 
     with pytest.raises(ValueError, match="packet_send_rate"):
@@ -116,7 +116,7 @@ def test_invalid_packet_send_rate_raises(tmp_path: Path) -> None:
 
 
 def test_invalid_port_raises(tmp_path: Path) -> None:
-    config_path = tmp_path / "DefaultStatsAPI.ini"
+    config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "PacketSendRate=30\nPort=49123\n")
 
     with pytest.raises(ValueError, match="port"):
