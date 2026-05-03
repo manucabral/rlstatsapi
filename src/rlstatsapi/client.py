@@ -14,6 +14,7 @@ import json
 import logging
 import random
 from collections import defaultdict
+from enum import Enum
 from typing import Any, AsyncIterator, Awaitable, Callable, Iterable, Literal, overload
 
 from .models import ClientMetrics, EventMessage, MatchStateSnapshot
@@ -44,7 +45,18 @@ from .types import (
 Handler = Callable[[EventMessage], Awaitable[None] | None]
 _AnyCallable = Callable[..., Any]
 _SimpleHandler = Callable[[], Awaitable[None] | None]
-_ErrorHandler = Callable[[str, Exception], Awaitable[None] | None]
+_ErrorHandler = Callable[
+    [EventMessage, Exception, _AnyCallable], Awaitable[None] | None
+]
+
+
+class ConnectionState(Enum):
+    """Granular connection lifecycle state for a StatsClient."""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    FAILED = "failed"
 
 
 class StatsClient:
@@ -63,6 +75,7 @@ class StatsClient:
         overflow: Literal["block", "drop", "raise"] = "block",
         connect_timeout: float = 5.0,
         drain_on_disconnect: bool = False,
+        handler_timeout: float | None = None,
     ) -> None:
         """Configure the client.
 
@@ -82,6 +95,8 @@ class StatsClient:
                 ``"raise"`` kills the connection.
             connect_timeout: Seconds to wait for TCP handshake before raising.
             drain_on_disconnect: Clear the queue when the session ends.
+            handler_timeout: Max seconds an async handler may run before being cancelled.
+                Sync handlers are not affected. None disables the timeout.
         """
         if reconnect_delay <= 0:
             raise ValueError("reconnect_delay must be positive")
@@ -95,6 +110,7 @@ class StatsClient:
         self.connect_timeout = connect_timeout
         self.overflow = overflow
         self.drain_on_disconnect = drain_on_disconnect
+        self.handler_timeout = handler_timeout
 
         self._queue: asyncio.Queue[EventMessage] = asyncio.Queue(maxsize=queue_size)
         self._handlers_by_event: dict[str, list[_AnyCallable]] = defaultdict(list)
@@ -108,18 +124,21 @@ class StatsClient:
         self._writer: asyncio.StreamWriter | None = None
         self._reader_task: asyncio.Task[None] | None = None
         self._stopping = False
-        self._connected = False
+        self._connection_state = ConnectionState.DISCONNECTED
         self._permanently_failed = False
         self._last_error: Exception | None = None
         self._metrics = ClientMetrics()
         self._state_tracker = MatchStateTracker()
 
     @property
+    def connection_state(self) -> ConnectionState:
+        """Return the current connection lifecycle state."""
+        return self._connection_state
+
+    @property
     def is_connected(self) -> bool:
-        """
-        Returns True if the client is currently connected to the Stats API.
-        """
-        return self._connected
+        """Return True if the client is currently connected to the Stats API."""
+        return self._connection_state == ConnectionState.CONNECTED
 
     @property
     def metrics(self) -> ClientMetrics:
@@ -162,9 +181,11 @@ class StatsClient:
         self._reader_task = asyncio.create_task(self._run(), name="rlstatsapi-reader")
         self._logger.debug("reader task started")
 
-    async def disconnect(self) -> None:
-        """
-        Disconnects from the Stats API and stops the reader task.
+    async def disconnect(self, timeout: float = 5.0) -> None:
+        """Disconnect from the Stats API and stop the reader task.
+
+        Args:
+            timeout: Seconds to wait for the reader task to finish before giving up.
         """
         self._stopping = True
         self._logger.debug("disconnect requested")
@@ -178,8 +199,8 @@ class StatsClient:
 
         if self._reader_task is not None:
             self._reader_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._reader_task
+            with contextlib.suppress(asyncio.TimeoutError, asyncio.CancelledError):
+                await asyncio.wait_for(self._reader_task, timeout=timeout)
             self._reader_task = None
         if self.drain_on_disconnect:
             self.clear_queue()
@@ -713,17 +734,51 @@ class StatsClient:
             if not filters or message.event in filters:
                 yield message
 
+    async def wait_for(
+        self,
+        event_name: str,
+        *,
+        timeout: float | None = None,
+    ) -> EventMessage:
+        """Wait until the next occurrence of ``event_name`` and return the message.
+
+        Args:
+            event_name: The event to wait for (e.g. ``"GoalScored"``).
+            timeout: Seconds before raising ``asyncio.TimeoutError``. None waits forever.
+
+        Returns:
+            The first matching ``EventMessage`` received after this call.
+
+        Raises:
+            asyncio.TimeoutError: If ``timeout`` elapses before the event arrives.
+        """
+        loop = asyncio.get_event_loop()
+        future: asyncio.Future[EventMessage] = loop.create_future()
+
+        def _handler(msg: EventMessage) -> None:
+            if not future.done():
+                self.off(event_name, _handler)
+                future.set_result(msg)
+
+        self._handlers_by_event[event_name].append(_handler)
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            self.off(event_name, _handler)
+            raise
+
     async def _run(self) -> None:
         """Main loop to manage connection and reading from the Stats API."""
         attempt = 0
         while not self._stopping:
             try:
                 self._logger.debug("connecting to tcp://%s:%d", self.host, self.port)
+                self._connection_state = ConnectionState.CONNECTING
                 self._reader, self._writer = await asyncio.wait_for(
                     asyncio.open_connection(host=self.host, port=self.port),
                     timeout=self.connect_timeout,
                 )
-                self._connected = True
+                self._connection_state = ConnectionState.CONNECTED
                 attempt = 0
                 self._logger.debug("tcp socket connected")
                 await self._fire_simple(self._on_connect_handlers)
@@ -747,6 +802,7 @@ class StatsClient:
                     and attempt > self.max_reconnect_attempts
                 ):
                     self._permanently_failed = True
+                    self._connection_state = ConnectionState.FAILED
                     self._logger.debug(
                         "max reconnect attempts (%d) reached",
                         self.max_reconnect_attempts,
@@ -759,8 +815,8 @@ class StatsClient:
                 self._logger.debug("reconnecting in %.2fs (attempt %d)", delay, attempt)
                 await asyncio.sleep(delay)
             finally:
-                if self._connected:
-                    self._connected = False
+                if self._connection_state == ConnectionState.CONNECTED:
+                    self._connection_state = ConnectionState.DISCONNECTED
                     await self._fire_simple(self._on_disconnect_handlers)
                 if self._writer is not None:
                     with contextlib.suppress(OSError, asyncio.TimeoutError):
@@ -832,9 +888,7 @@ class StatsClient:
                 await self._dispatch(message)
 
     async def _dispatch(self, message: EventMessage) -> None:
-        """
-        Dispatches to handlers for `message.event` and global handlers.
-        """
+        """Dispatches to handlers for `message.event` and global handlers."""
         handlers = list(self._handlers_any) + list(
             self._handlers_by_event.get(message.event, [])
         )
@@ -842,13 +896,19 @@ class StatsClient:
             try:
                 result = handler(message)
                 if inspect.isawaitable(result):
-                    await result
+                    if (
+                        self.handler_timeout is not None
+                        and inspect.iscoroutinefunction(handler)
+                    ):
+                        await asyncio.wait_for(result, timeout=self.handler_timeout)
+                    else:
+                        await result
             except Exception as exc:
                 self._metrics.handler_errors += 1
                 if self._error_handlers:
                     for error_handler in list(self._error_handlers):
                         try:
-                            r = error_handler(message.event, exc)
+                            r = error_handler(message, exc, handler)
                             if inspect.isawaitable(r):
                                 await r
                         except Exception as err_exc:
