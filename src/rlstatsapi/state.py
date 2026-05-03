@@ -58,6 +58,7 @@ class MatchStateTracker:
         snapshot: MatchStateSnapshot,
         message: EventMessage,
     ) -> None:
+        """Extract game-level fields from an UpdateState payload into the snapshot."""
         game = message.data.get("Game", {})
         if not isinstance(game, dict):
             return
@@ -81,6 +82,7 @@ class MatchStateTracker:
             snapshot.winner = winner
 
     def _apply_teams(self, snapshot: MatchStateSnapshot, teams: object) -> None:
+        """Update blue/orange score from the Teams list in an UpdateState payload."""
         if not isinstance(teams, list):
             return
 
@@ -99,6 +101,7 @@ class MatchStateTracker:
         snapshot: MatchStateSnapshot,
         message: EventMessage,
     ) -> None:
+        """Update last scorer name and goal speed from a GoalScored payload."""
         scorer = message.data.get("Scorer", {})
         if isinstance(scorer, dict):
             name = scorer.get("Name")
