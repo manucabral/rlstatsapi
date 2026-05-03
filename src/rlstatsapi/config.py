@@ -7,9 +7,12 @@ prepare the game config before starting Rocket League and then connect with
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+_logger = logging.getLogger("rlstatsapi.config")
 
 DEFAULT_PACKET_SEND_RATE = 30
 DEFAULT_STATS_API_PORT = 49123
@@ -165,6 +168,7 @@ def configure_stats_api(
 
 
 def _require_config_path(path: str | Path | None) -> Path:
+    """Return the resolved config path or raise ``FileNotFoundError`` if not found."""
     config_path = find_stats_api_config(path)
     if config_path is None:
         raise FileNotFoundError(_WARNING)
@@ -172,6 +176,7 @@ def _require_config_path(path: str | Path | None) -> Path:
 
 
 def _parse_int(value: str | None) -> int | None:
+    """Parse a string to int, returning None on failure or missing input."""
     if value is None:
         return None
     try:
@@ -181,10 +186,14 @@ def _parse_int(value: str | None) -> int | None:
 
 
 def _read_key_values(text: str) -> dict[str, str]:
+    """Parse ``key=value`` pairs from INI-style text, ignoring comments and blank lines."""
     values: dict[str, str] = {}
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith(("#", ";")) or "=" not in stripped:
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        if "=" not in stripped:
+            _logger.warning("skipped malformed config line: %r", stripped)
             continue
         key, value = stripped.split("=", 1)
         values[key.strip().casefold()] = value.strip()
@@ -192,7 +201,18 @@ def _read_key_values(text: str) -> dict[str, str]:
 
 
 def _status_for_path(path: Path) -> StatsAPIConfigStatus:
-    text = path.read_text(encoding="utf-8")
+    """Build a ``StatsAPIConfigStatus`` by reading and parsing an existing config file."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return StatsAPIConfigStatus(
+            found=False,
+            enabled=False,
+            path=str(path),
+            packet_send_rate=None,
+            port=None,
+            warning=_WARNING,
+        )
     values = _read_key_values(text)
     packet_send_rate = _parse_int(values.get("packetsendrate"))
     port = _parse_int(values.get("port"))
@@ -207,6 +227,7 @@ def _status_for_path(path: Path) -> StatsAPIConfigStatus:
 
 
 def _set_or_append_key(lines: list[str], key: str, value: str) -> list[str]:
+    """Replace an existing ``key=value`` line in-place, or append it if not present."""
     output: list[str] = []
     replaced = False
     for line in lines:
@@ -227,17 +248,18 @@ def _set_or_append_key(lines: list[str], key: str, value: str) -> list[str]:
 
 
 def _write_lines(path: Path, lines: list[str], original_text: str) -> None:
+    """Write lines back to file, preserving the original trailing newline."""
     newline = "\n" if original_text.endswith(("\n", "\r\n")) else ""
     path.write_text("\n".join(lines) + newline, encoding="utf-8")
 
 
 def _validate_packet_send_rate(packet_send_rate: int) -> None:
-    if packet_send_rate < 0 or packet_send_rate > 120:
-        raise ValueError("packet_send_rate must be between 0 and 120")
-    if packet_send_rate == 0:
-        raise ValueError("packet_send_rate must be greater than 0 when enabled")
+    """Raise ``ValueError`` if packet_send_rate is outside the valid range [1, 120]."""
+    if packet_send_rate < 1 or packet_send_rate > 120:
+        raise ValueError("packet_send_rate must be between 1 and 120 when enabled")
 
 
 def _validate_port(port: int) -> None:
+    """Raise ``ValueError`` if port is outside the valid range [1, 65535]."""
     if port < 1 or port > 65535:
         raise ValueError("port must be between 1 and 65535")
