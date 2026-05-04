@@ -1,175 +1,468 @@
 # Event Reference
 
-This page lists each documented event and the main fields you can expect in `msg.data`.
+Each event arrives as an `EventMessage` with two fields:
+
+- `event` — the event name string
+- `data` — a dict with the payload fields shown below
+
+Use [`cast_event_data`](api.md) to get typed autocomplete for a specific event.
+
+---
 
 ## UpdateState
 
-**Payload type:** `UpdateStatePayload`
+Fired repeatedly while a match is live. Contains full game + player snapshot.
 
-Main keys:
-- `MatchGuid: str` (online/LAN)
-- `Players: list[UpdateStatePlayer]`
-- `Game: UpdateStateGame`
+```json
+{
+  "event": "UpdateState",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "Players": [
+      {
+        "Name": "Psyonix",
+        "PrimaryId": "76561198000000000",
+        "Shortcut": 0,
+        "TeamNum": 0,
+        "Score": 100,
+        "Goals": 1,
+        "Shots": 2,
+        "Assists": 0,
+        "Saves": 1,
+        "Touches": 12,
+        "CarTouches": 10,
+        "Demos": 0,
+        "bHasCar": true,
+        "Speed": 1400.0,
+        "Boost": 72,
+        "bBoosting": false,
+        "bOnGround": true,
+        "bOnWall": false,
+        "bPowersliding": false,
+        "bDemolished": false,
+        "bSupersonic": false
+      }
+    ],
+    "Game": {
+      "Teams": [
+        {
+          "Name": "Blue",
+          "TeamNum": 0,
+          "Score": 1,
+          "ColorPrimary": "#0000FF",
+          "ColorSecondary": "#FFFFFF"
+        },
+        {
+          "Name": "Orange",
+          "TeamNum": 1,
+          "Score": 0,
+          "ColorPrimary": "#FF8800",
+          "ColorSecondary": "#000000"
+        }
+      ],
+      "TimeSeconds": 204,
+      "bOvertime": false,
+      "Frame": 6120,
+      "Elapsed": 102.0,
+      "Ball": {
+        "Speed": 800.0,
+        "TeamNum": 255
+      },
+      "bReplay": false,
+      "bHasWinner": false,
+      "Winner": "",
+      "Arena": "Stadium_P",
+      "bHasTarget": false
+    }
+  }
+}
+```
 
-`Game` commonly includes:
-- `Teams`, `TimeSeconds`, `bOvertime`, `Ball`
-- `bReplay`, `bHasWinner`, `Winner`, `Arena`
-- `bHasTarget`, `Target`
+---
 
 ## BallHit
 
-**Payload type:** `BallHitPayload`
+Fired when a player hits the ball.
 
-Main keys:
-- `MatchGuid: str`
-- `Players: list[PlayerRef]`
-- `Ball: { PreHitSpeed, PostHitSpeed, Location }`
+```json
+{
+  "event": "BallHit",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "Players": [
+      {
+        "Name": "Psyonix",
+        "Shortcut": 0,
+        "TeamNum": 0
+      }
+    ],
+    "Ball": {
+      "PreHitSpeed": 0.0,
+      "PostHitSpeed": 1200.5,
+      "Location": {
+        "X": 120.0,
+        "Y": -200.0,
+        "Z": 95.0
+      }
+    }
+  }
+}
+```
+
+---
 
 ## ClockUpdatedSeconds
 
-**Payload type:** `ClockUpdatedSecondsPayload`
+Fired each second while the match clock is running.
 
-Main keys:
-- `MatchGuid: str`
-- `TimeSeconds: int`
-- `bOvertime: bool`
+```json
+{
+  "event": "ClockUpdatedSeconds",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "TimeSeconds": 187,
+    "bOvertime": false
+  }
+}
+```
+
+---
 
 ## CountdownBegin
 
-**Payload type:** `CountdownBeginPayload`
+Fired when the pre-kickoff countdown starts.
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "CountdownBegin",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## CrossbarHit
 
-**Payload type:** `CrossbarHitPayload`
+Fired when the ball hits the crossbar.
 
-Main keys:
-- `MatchGuid: str`
-- `BallLocation: Vector3`
-- `BallSpeed: float`
-- `ImpactForce: float`
-- `BallLastTouch: { Player, Speed }`
+```json
+{
+  "event": "CrossbarHit",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "BallLocation": {
+      "X": 0.0,
+      "Y": -5120.0,
+      "Z": 642.775
+    },
+    "BallSpeed": 2100.3,
+    "ImpactForce": 0.85,
+    "BallLastTouch": {
+      "Player": {
+        "Name": "Psyonix",
+        "Shortcut": 0,
+        "TeamNum": 0
+      },
+      "Speed": 1980.0
+    }
+  }
+}
+```
 
-## GoalReplayEnd
-
-**Payload type:** `GoalReplayEndPayload`
-
-Main keys:
-- `MatchGuid: str`
-
-## GoalReplayStart
-
-**Payload type:** `GoalReplayStartPayload`
-
-Main keys:
-- `MatchGuid: str`
-
-## GoalReplayWillEnd
-
-**Payload type:** `GoalReplayWillEndPayload`
-
-Main keys:
-- `MatchGuid: str`
+---
 
 ## GoalScored
 
-**Payload type:** `GoalScoredPayload`
+Fired when a goal is scored.
 
-Main keys:
-- `MatchGuid: str`
-- `GoalSpeed: float`
-- `GoalTime: float`
-- `ImpactLocation: Vector3`
-- `Scorer: PlayerRef`
-- `Assister: PlayerRef` (conditional)
-- `BallLastTouch: { Player, Speed }`
+```json
+{
+  "event": "GoalScored",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "GoalSpeed": 2280.5,
+    "GoalTime": 155.3,
+    "ImpactLocation": {
+      "X": -42.0,
+      "Y": -5120.0,
+      "Z": 200.0
+    },
+    "Scorer": {
+      "Name": "Psyonix",
+      "Shortcut": 0,
+      "TeamNum": 0
+    },
+    "Assister": {
+      "Name": "Ghosting",
+      "Shortcut": 1,
+      "TeamNum": 0
+    },
+    "BallLastTouch": {
+      "Player": {
+        "Name": "Psyonix",
+        "Shortcut": 0,
+        "TeamNum": 0
+      },
+      "Speed": 2280.5
+    }
+  }
+}
+```
+
+> `Assister` is absent when no assist was awarded.
+
+---
+
+## GoalReplayStart
+
+Fired when the goal replay begins.
+
+```json
+{
+  "event": "GoalReplayStart",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
+
+## GoalReplayWillEnd
+
+Fired shortly before the goal replay ends.
+
+```json
+{
+  "event": "GoalReplayWillEnd",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
+
+## GoalReplayEnd
+
+Fired when the goal replay ends.
+
+```json
+{
+  "event": "GoalReplayEnd",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## MatchCreated
 
-**Payload type:** `MatchCreatedPayload`
+Fired when a match session is created (before initialization).
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "MatchCreated",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## MatchInitialized
 
-**Payload type:** `MatchInitializedPayload`
+Fired when the match finishes loading and is ready to start.
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "MatchInitialized",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## MatchDestroyed
 
-**Payload type:** `MatchDestroyedPayload`
+Fired when the match session is torn down.
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "MatchDestroyed",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## MatchEnded
 
-**Payload type:** `MatchEndedPayload`
+Fired when a match finishes. Includes the winning team.
 
-Main keys:
-- `MatchGuid: str`
-- `WinnerTeamNum: int`
+```json
+{
+  "event": "MatchEnded",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "WinnerTeamNum": 0
+  }
+}
+```
+
+---
 
 ## MatchPaused
 
-**Payload type:** `MatchPausedPayload`
+Fired when the match is paused.
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "MatchPaused",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## MatchUnpaused
 
-**Payload type:** `MatchUnpausedPayload`
+Fired when the match resumes after a pause.
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "MatchUnpaused",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## PodiumStart
 
-**Payload type:** `PodiumStartPayload`
+Fired when the post-match podium sequence begins.
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "PodiumStart",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## ReplayCreated
 
-**Payload type:** `ReplayCreatedPayload`
+Fired when an in-match replay starts (e.g. goal replay saved as replay).
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "ReplayCreated",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## RoundStarted
 
-**Payload type:** `RoundStartedPayload`
+Fired when a new round begins (after kickoff countdown).
 
-Main keys:
-- `MatchGuid: str`
+```json
+{
+  "event": "RoundStarted",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6"
+  }
+}
+```
+
+---
 
 ## StatfeedEvent
 
-**Payload type:** `StatfeedEventPayload`
+Fired for statfeed notifications (Epic Save, Aerial Goal, Hat Trick, etc.).
 
-Main keys:
-- `MatchGuid: str`
-- `EventName: str`
-- `Type: str`
-- `MainTarget: PlayerRef`
-- `SecondaryTarget: PlayerRef` (conditional)
+```json
+{
+  "event": "StatfeedEvent",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "EventName": "EpicSave",
+    "Type": "Save",
+    "MainTarget": {
+      "Name": "Psyonix",
+      "Shortcut": 0,
+      "TeamNum": 0
+    },
+    "SecondaryTarget": {
+      "Name": "Ghosting",
+      "Shortcut": 1,
+      "TeamNum": 1
+    }
+  }
+}
+```
 
-## Common nested types
+> `SecondaryTarget` is absent when the stat has no secondary player.
 
-- `Vector3`: `X`, `Y`, `Z`
-- `PlayerRef`: `Name`, `Shortcut`, `TeamNum`
-- `TeamState`: `Name`, `TeamNum`, `Score`, `ColorPrimary`, `ColorSecondary`
+---
 
-## Practical usage
+## Common types
 
-Use `cast_event_data(...)` to get strong autocomplete for event-specific fields:
+### Vector3
+
+```json
+{ "X": 0.0, "Y": 0.0, "Z": 0.0 }
+```
+
+### PlayerRef
+
+```json
+{ "Name": "Psyonix", "Shortcut": 0, "TeamNum": 0 }
+```
+
+### TeamState
+
+```json
+{
+  "Name": "Blue",
+  "TeamNum": 0,
+  "Score": 1,
+  "ColorPrimary": "#0000FF",
+  "ColorSecondary": "#FFFFFF"
+}
+```
+
+### BallLastTouch
+
+```json
+{
+  "Player": { "Name": "Psyonix", "Shortcut": 0, "TeamNum": 0 },
+  "Speed": 1980.0
+}
+```
+
+---
+
+## Usage
 
 ```python
 from rlstatsapi.models import EventMessage
@@ -178,5 +471,6 @@ from rlstatsapi.types import GoalScoredPayload, cast_event_data
 
 def on_goal(msg: EventMessage) -> None:
     data: GoalScoredPayload = cast_event_data("GoalScored", msg.data)
-    print(data.get("Scorer", {}).get("Name"))
+    scorer = data.get("Scorer", {})
+    print(f"{scorer.get('Name')} scored!")
 ```
