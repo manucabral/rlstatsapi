@@ -6,6 +6,7 @@ KNOWN_EVENTS: frozenset[str] = frozenset(
     {
         "UpdateState",
         "BallHit",
+        "BoostPickup",
         "ClockUpdatedSeconds",
         "CountdownBegin",
         "CrossbarHit",
@@ -19,6 +20,8 @@ KNOWN_EVENTS: frozenset[str] = frozenset(
         "MatchEnded",
         "MatchPaused",
         "MatchUnpaused",
+        "PlayerJoined",
+        "PlayerLeft",
         "PodiumStart",
         "ReplayCreated",
         "RoundStarted",

@@ -18,6 +18,7 @@ from typing import (
 EventName: TypeAlias = Literal[
     "UpdateState",
     "BallHit",
+    "BoostPickup",
     "ClockUpdatedSeconds",
     "CountdownBegin",
     "CrossbarHit",
@@ -31,6 +32,8 @@ EventName: TypeAlias = Literal[
     "MatchEnded",
     "MatchPaused",
     "MatchUnpaused",
+    "PlayerJoined",
+    "PlayerLeft",
     "PodiumStart",
     "ReplayCreated",
     "RoundStarted",
@@ -102,6 +105,7 @@ class UpdateStatePlayer(TypedDict, total=False):
     Touches: int
     CarTouches: int
     Demos: int
+    Loadout: list[str]
     bHasCar: bool
     Speed: float
     Boost: int
@@ -112,12 +116,14 @@ class UpdateStatePlayer(TypedDict, total=False):
     bDemolished: bool
     Attacker: PlayerAttacker
     bSupersonic: bool
+    PickupClass: str
 
 
 class UpdateStateGame(TypedDict, total=False):
     """Game-state dictionary inside ``UpdateState.Game``."""
 
     Teams: list[TeamState]
+    PlaylistId: int
     TimeSeconds: int
     bOvertime: bool
     Frame: int
@@ -153,6 +159,17 @@ class BallHitPayload(TypedDict, total=False):
     MatchGuid: str
     Players: list[PlayerRef]
     Ball: BallHitBall
+
+
+class BoostPickupPayload(TypedDict, total=False):
+    """Payload schema for ``BoostPickup`` (spectator only)."""
+
+    MatchGuid: str
+    Player: PlayerRef
+    Location: Vector3
+    BoostAmount: float
+    BoostType: str
+    bReplay: bool
 
 
 class ClockUpdatedSecondsPayload(TypedDict, total=False):
@@ -235,7 +252,10 @@ class MatchDestroyedPayload(TypedDict, total=False):
 
 
 class MatchEndedPayload(TypedDict, total=False):
-    """Payload schema for ``MatchEnded``."""
+    """Payload schema for ``MatchEnded``.
+
+    ``WinnerTeamNum`` is ``-1`` when the match ends in no contest.
+    """
 
     MatchGuid: str
     WinnerTeamNum: int
@@ -253,6 +273,22 @@ class MatchUnpausedPayload(TypedDict, total=False):
     MatchGuid: str
 
 
+class PlayerJoinedPayload(TypedDict, total=False):
+    """Payload schema for ``PlayerJoined``."""
+
+    MatchGuid: str
+    PlayerName: str
+    PrimaryId: str
+
+
+class PlayerLeftPayload(TypedDict, total=False):
+    """Payload schema for ``PlayerLeft``."""
+
+    MatchGuid: str
+    PlayerName: str
+    PrimaryId: str
+
+
 class PodiumStartPayload(TypedDict, total=False):
     """Payload schema for ``PodiumStart``."""
 
@@ -263,6 +299,8 @@ class ReplayCreatedPayload(TypedDict, total=False):
     """Payload schema for ``ReplayCreated``."""
 
     MatchGuid: str
+    FileName: str
+    Date: str
 
 
 class RoundStartedPayload(TypedDict, total=False):
@@ -284,6 +322,7 @@ class StatfeedEventPayload(TypedDict, total=False):
 KnownEventPayload: TypeAlias = (
     UpdateStatePayload
     | BallHitPayload
+    | BoostPickupPayload
     | ClockUpdatedSecondsPayload
     | CountdownBeginPayload
     | CrossbarHitPayload
@@ -297,6 +336,8 @@ KnownEventPayload: TypeAlias = (
     | MatchEndedPayload
     | MatchPausedPayload
     | MatchUnpausedPayload
+    | PlayerJoinedPayload
+    | PlayerLeftPayload
     | PodiumStartPayload
     | ReplayCreatedPayload
     | RoundStartedPayload
@@ -336,6 +377,12 @@ def cast_event_data(
 def cast_event_data(
     event_name: Literal["BallHit"], data: Mapping[str, Any]
 ) -> BallHitPayload: ...
+
+
+@overload
+def cast_event_data(
+    event_name: Literal["BoostPickup"], data: Mapping[str, Any]
+) -> BoostPickupPayload: ...
 
 
 @overload
@@ -414,6 +461,18 @@ def cast_event_data(
 def cast_event_data(
     event_name: Literal["MatchUnpaused"], data: Mapping[str, Any]
 ) -> MatchUnpausedPayload: ...
+
+
+@overload
+def cast_event_data(
+    event_name: Literal["PlayerJoined"], data: Mapping[str, Any]
+) -> PlayerJoinedPayload: ...
+
+
+@overload
+def cast_event_data(
+    event_name: Literal["PlayerLeft"], data: Mapping[str, Any]
+) -> PlayerLeftPayload: ...
 
 
 @overload

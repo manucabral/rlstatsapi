@@ -19,29 +19,34 @@ def _int_or_zero(value: object) -> int:
 
 def _build_player_snapshot(player: dict[str, Any]) -> PlayerSnapshot | None:
     """Build a ``PlayerSnapshot`` from one ``UpdateState.Players`` entry."""
-    name = player.get("Name")
-    shortcut = player.get("Shortcut")
-    if not isinstance(name, str) or not _is_int(shortcut):
+    # ``type(x) is int`` rejects bools and is cheaper than two isinstance calls;
+    # this runs for every player on every UpdateState tick.
+    get = player.get
+    name = get("Name")
+    shortcut = get("Shortcut")
+    if type(name) is not str or type(shortcut) is not int:
         return None
-    team_num = player.get("TeamNum")
-    raw_speed = player.get("Speed")
-    speed = (
-        float(raw_speed)
-        if isinstance(raw_speed, (int, float)) and not isinstance(raw_speed, bool)
-        else 0.0
-    )
+    team_num = get("TeamNum")
+    score = get("Score")
+    goals = get("Goals")
+    assists = get("Assists")
+    saves = get("Saves")
+    shots = get("Shots")
+    boost = get("Boost")
+    speed = get("Speed")
+    speed_type = type(speed)
     return PlayerSnapshot(
-        name=name,
-        shortcut=shortcut,
-        team_num=team_num if _is_int(team_num) else 0,
-        score=_int_or_zero(player.get("Score")),
-        goals=_int_or_zero(player.get("Goals")),
-        assists=_int_or_zero(player.get("Assists")),
-        saves=_int_or_zero(player.get("Saves")),
-        shots=_int_or_zero(player.get("Shots")),
-        boost=_int_or_zero(player.get("Boost")),
-        speed=speed,
-        is_demolished=bool(player.get("bDemolished", False)),
+        name,
+        shortcut,
+        team_num if type(team_num) is int else 0,
+        score if type(score) is int else 0,
+        goals if type(goals) is int else 0,
+        assists if type(assists) is int else 0,
+        saves if type(saves) is int else 0,
+        shots if type(shots) is int else 0,
+        boost if type(boost) is int else 0,
+        speed if speed_type is float else float(speed) if speed_type is int else 0.0,
+        bool(get("bDemolished")),
     )
 
 
@@ -51,15 +56,21 @@ class MatchStateTracker:
     def __init__(self) -> None:
         """Initialize the tracker with an empty ``MatchStateSnapshot``."""
         self._snapshot = MatchStateSnapshot()
+        self._pending: dict[str, Any] | None = None
 
     @property
     def snapshot(self) -> MatchStateSnapshot:
-        """Current mutable match snapshot updated by ``update()``."""
+        """Current match snapshot, brought up to date on access."""
+        pending = self._pending
+        if pending is not None:
+            self._pending = None
+            self._apply_update_state(self._snapshot, pending)
         return self._snapshot
 
     def reset(self) -> None:
         """Replace the current snapshot with a fresh ``MatchStateSnapshot``."""
         self._snapshot = MatchStateSnapshot()
+        self._pending = None
 
     def update(self, message: EventMessage) -> MatchStateSnapshot:
         """Apply one incoming event and return the updated snapshot.
@@ -70,17 +81,38 @@ class MatchStateTracker:
         Returns:
             MatchStateSnapshot: The updated match state snapshot.
         """
+        self.ingest(message)
+        return self.snapshot
+
+    def ingest(self, message: EventMessage) -> None:
+        """Record one incoming event without building player snapshots yet.
+
+        ``UpdateState`` arrives up to 120 times per second, so its payload is
+        only kept here and applied when ``snapshot`` is read or another event
+        that touches the state arrives.
+        """
         event = message.event
+        snapshot = self._snapshot
+        counts = snapshot.event_counts
+        if event == "UpdateState":
+            snapshot.last_event = event
+            counts[event] = counts.get(event, 0) + 1
+            self._pending = message.data
+            return
+
         if event == "MatchDestroyed":
             self.reset()
             snapshot = self._snapshot
             snapshot.last_event = event
             snapshot.event_counts[event] = 1
-            return snapshot
+            return
 
-        snapshot = self._snapshot
+        pending = self._pending
+        if pending is not None:
+            self._pending = None
+            self._apply_update_state(snapshot, pending)
+
         snapshot.last_event = event
-        counts = snapshot.event_counts
         counts[event] = counts.get(event, 0) + 1
 
         data = message.data
@@ -88,9 +120,7 @@ class MatchStateTracker:
         if isinstance(match_guid, str) and match_guid:
             snapshot.match_guid = match_guid
 
-        if event == "UpdateState":
-            self._apply_update_state(snapshot, data)
-        elif event == "ClockUpdatedSeconds":
+        if event == "ClockUpdatedSeconds":
             self._apply_clock_updated(snapshot, data)
         elif event == "GoalScored":
             self._apply_goal_scored(snapshot, data)
@@ -99,9 +129,11 @@ class MatchStateTracker:
         elif event == "GoalReplayEnd":
             snapshot.replay_active = False
         elif event == "MatchEnded":
-            snapshot.has_winner = True
-
-        return snapshot
+            winner_team_num = data.get("WinnerTeamNum")
+            if _is_int(winner_team_num):
+                snapshot.winner_team_num = winner_team_num
+                snapshot.no_contest = winner_team_num == -1
+            snapshot.has_winner = not snapshot.no_contest
 
     def _apply_update_state(
         self,
@@ -109,6 +141,10 @@ class MatchStateTracker:
         data: dict[str, Any],
     ) -> None:
         """Extract game, team, and player fields from an ``UpdateState`` payload."""
+        match_guid = data.get("MatchGuid")
+        if isinstance(match_guid, str) and match_guid:
+            snapshot.match_guid = match_guid
+
         game = data.get("Game")
         if not isinstance(game, dict):
             return
@@ -123,6 +159,10 @@ class MatchStateTracker:
         snapshot.overtime = bool(game.get("bOvertime", False))
         snapshot.replay_active = bool(game.get("bReplay", False))
         snapshot.has_winner = bool(game.get("bHasWinner", False))
+
+        playlist_id = game.get("PlaylistId")
+        if _is_int(playlist_id):
+            snapshot.playlist_id = playlist_id
 
         arena = game.get("Arena")
         if isinstance(arena, str) and arena:

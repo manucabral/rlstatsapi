@@ -114,9 +114,12 @@ class MatchStateSnapshot:
         time_seconds: Remaining or elapsed clock seconds reported by the game.
         overtime: ``True`` when the match is in overtime.
         arena: Internal map/arena identifier.
-        replay_active: ``True`` while an in-match goal replay is playing.
+        playlist_id: Playlist ID of the current match from ``UpdateState``.
+        replay_active: ``True`` while a goal replay or history replay is playing.
         has_winner: ``True`` once a winner has been decided.
         winner: Winning team name when reported by ``UpdateState``.
+        winner_team_num: ``WinnerTeamNum`` from ``MatchEnded`` (``-1`` on no contest).
+        no_contest: ``True`` when ``MatchEnded`` reported no winner.
         last_event: Name of the most recently processed event.
         last_scorer: Name of the player who scored the most recent goal.
         last_goal_speed: Speed of the most recent goal.
@@ -131,9 +134,12 @@ class MatchStateSnapshot:
     time_seconds: int | None = None
     overtime: bool = False
     arena: str | None = None
+    playlist_id: int | None = None
     replay_active: bool = False
     has_winner: bool = False
     winner: str | None = None
+    winner_team_num: int | None = None
+    no_contest: bool = False
     last_event: str | None = None
     last_scorer: str | None = None
     last_goal_speed: float | None = None
