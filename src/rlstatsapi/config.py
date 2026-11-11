@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +12,9 @@ _logger = logging.getLogger("rlstatsapi.config")
 
 DEFAULT_PACKET_SEND_RATE = 30
 DEFAULT_STATS_API_PORT = 49123
+DEFAULT_STATS_API_WEB_PORT = 49124
 DEFAULT_STATS_API_FILENAME = "TAStatsAPI.ini"
+DEFAULT_STATS_API_FALLBACK_FILENAME = "DefaultStatsAPI.ini"
 _USER_CONFIG_RELATIVE_DIR = Path("My Games") / "Rocket League" / "TAGame" / "Config"
 _WARNING = (
     "TAStatsAPI.ini was not found automatically. Pass an explicit path if "
@@ -29,6 +32,7 @@ class StatsAPIConfigStatus:
         path: Resolved file path as a string, or ``None`` if not found.
         packet_send_rate: Parsed ``PacketSendRate`` value, or ``None``.
         port: Parsed ``Port`` value, or ``None``.
+        web_port: Parsed ``WebPort`` (WebSocket) value, or ``None``. ``0`` means disabled.
         warning: Diagnostic message when the config file was not found.
         discovery_scope: Discovery strategy label.
     """
@@ -40,13 +44,17 @@ class StatsAPIConfigStatus:
     port: int | None
     warning: str | None = None
     discovery_scope: str = "windows-user-config"
+    web_port: int | None = None
 
 
 def candidate_stats_api_paths() -> list[Path]:
-    """Return candidate user paths for ``TAStatsAPI.ini`` on Windows.
+    """Return candidate user paths for the Stats API config on Windows.
+
+    In each folder ``TAStatsAPI.ini`` comes before ``DefaultStatsAPI.ini``,
+    which is the order the game uses.
 
     Returns:
-        list[Path]: Deduplicated list of candidate ``TAStatsAPI.ini`` paths.
+        list[Path]: Deduplicated list of candidate config paths.
     """
     roots: list[Path] = []
     for env_name in ("USERPROFILE", "HOME"):
@@ -58,26 +66,15 @@ def candidate_stats_api_paths() -> list[Path]:
 
     candidates: list[Path] = []
     for root in roots:
-        candidates.append(
-            root / "Documents" / _USER_CONFIG_RELATIVE_DIR / DEFAULT_STATS_API_FILENAME
-        )
-        candidates.append(
-            root / "Documentos" / _USER_CONFIG_RELATIVE_DIR / DEFAULT_STATS_API_FILENAME
-        )
-        candidates.append(
-            root
-            / "OneDrive"
-            / "Documents"
-            / _USER_CONFIG_RELATIVE_DIR
-            / DEFAULT_STATS_API_FILENAME
-        )
-        candidates.append(
-            root
-            / "OneDrive"
-            / "Documentos"
-            / _USER_CONFIG_RELATIVE_DIR
-            / DEFAULT_STATS_API_FILENAME
-        )
+        for documents in (
+            root / "Documents",
+            root / "Documentos",
+            root / "OneDrive" / "Documents",
+            root / "OneDrive" / "Documentos",
+        ):
+            folder = documents / _USER_CONFIG_RELATIVE_DIR
+            candidates.append(folder / DEFAULT_STATS_API_FILENAME)
+            candidates.append(folder / DEFAULT_STATS_API_FALLBACK_FILENAME)
 
     unique: list[Path] = []
     seen: set[str] = set()
@@ -185,8 +182,38 @@ def set_stats_api_port(
 
     config_path = _require_config_path(path)
     text = config_path.read_text(encoding="utf-8")
+    _check_port_conflict(port, _current_web_port(text))
     lines = text.splitlines()
     lines = _set_or_append_key(lines, "Port", str(port))
+    _write_lines(config_path, lines, text)
+    return _status_for_path(config_path)
+
+
+def set_stats_api_web_port(
+    web_port: int,
+    path: str | Path | None = None,
+) -> StatsAPIConfigStatus:
+    """Update ``WebPort`` (the WebSocket port) and preserve other settings.
+
+    Args:
+        web_port: WebSocket port between 1 and 65535, or ``0`` to disable it.
+        path: Optional explicit path to ``TAStatsAPI.ini``.
+
+    Returns:
+        StatsAPIConfigStatus: Updated status read back from disk.
+
+    Raises:
+        ValueError: If ``web_port`` is out of range or equal to ``Port``.
+        FileNotFoundError: If the config file cannot be found.
+    """
+    _validate_web_port(web_port)
+
+    config_path = _require_config_path(path)
+    text = config_path.read_text(encoding="utf-8")
+    port = _parse_int(_read_key_values(text).get("port"))
+    _check_port_conflict(DEFAULT_STATS_API_PORT if port is None else port, web_port)
+    lines = text.splitlines()
+    lines = _set_or_append_key(lines, "WebPort", str(web_port))
     _write_lines(config_path, lines, text)
     return _status_for_path(config_path)
 
@@ -196,28 +223,36 @@ def configure_stats_api(
     port: int = DEFAULT_STATS_API_PORT,
     packet_send_rate: int = DEFAULT_PACKET_SEND_RATE,
     path: str | Path | None = None,
+    web_port: int | None = None,
 ) -> StatsAPIConfigStatus:
-    """Update ``PacketSendRate`` and ``Port`` in a single file write.
+    """Update ``PacketSendRate``, ``Port`` and optionally ``WebPort`` in one write.
 
     Args:
         enabled: ``True`` to write ``packet_send_rate``, ``False`` to write ``0``.
         port: TCP port between 1 and 65535.
         packet_send_rate: Send rate between 1 and 120 when ``enabled`` is ``True``.
         path: Optional explicit path to ``TAStatsAPI.ini``.
+        web_port: WebSocket port, ``0`` to disable it, or ``None`` to leave the
+            file's value untouched.
 
     Returns:
         StatsAPIConfigStatus: Updated status read back from disk.
 
     Raises:
-        ValueError: If ``port`` or ``packet_send_rate`` is out of range.
+        ValueError: If a value is out of range or ``port`` equals the WebSocket port.
         FileNotFoundError: If the config file cannot be found.
     """
     _validate_port(port)
+    if web_port is not None:
+        _validate_web_port(web_port)
     if enabled:
         _validate_packet_send_rate(packet_send_rate)
 
     config_path = _require_config_path(path)
     text = config_path.read_text(encoding="utf-8")
+    _check_port_conflict(
+        port, _current_web_port(text) if web_port is None else web_port
+    )
     lines = text.splitlines()
     lines = _set_or_append_key(
         lines,
@@ -225,6 +260,8 @@ def configure_stats_api(
         "0" if not enabled else str(packet_send_rate),
     )
     lines = _set_or_append_key(lines, "Port", str(port))
+    if web_port is not None:
+        lines = _set_or_append_key(lines, "WebPort", str(web_port))
     _write_lines(config_path, lines, text)
     return _status_for_path(config_path)
 
@@ -244,7 +281,26 @@ def _parse_int(value: str | None) -> int | None:
     try:
         return int(value.strip())
     except ValueError:
+        pass
+    try:  # the game documents PacketSendRate as a float ("30.0")
+        number = float(value.strip())
+    except ValueError:
         return None
+    return int(number) if math.isfinite(number) else None
+
+
+def _current_web_port(text: str) -> int:
+    """Return the ``WebPort`` in ``text``, or the game default when it is missing."""
+    web_port = _parse_int(_read_key_values(text).get("webport"))
+    return DEFAULT_STATS_API_WEB_PORT if web_port is None else web_port
+
+
+def _check_port_conflict(port: int, web_port: int) -> None:
+    """Raise ``ValueError`` when the TCP and WebSocket ports are the same."""
+    if web_port != 0 and port == web_port:
+        raise ValueError(
+            f"Port and WebPort must differ (both are {port}); the game refuses equal ports"
+        )
 
 
 def _read_key_values(text: str) -> dict[str, str]:
@@ -282,6 +338,7 @@ def _status_for_path(path: Path) -> StatsAPIConfigStatus:
     values = _read_key_values(text)
     packet_send_rate = _parse_int(values.get("packetsendrate"))
     port = _parse_int(values.get("port"))
+    web_port = _parse_int(values.get("webport"))
     return StatsAPIConfigStatus(
         found=True,
         enabled=bool(packet_send_rate and packet_send_rate > 0),
@@ -289,6 +346,7 @@ def _status_for_path(path: Path) -> StatsAPIConfigStatus:
         packet_send_rate=packet_send_rate,
         port=port,
         warning=None,
+        web_port=web_port,
     )
 
 
@@ -340,3 +398,9 @@ def _validate_port(port: int) -> None:
     """Raise ``ValueError`` if ``port`` is outside 1..65535."""
     if isinstance(port, bool) or port < 1 or port > 65535:
         raise ValueError("port must be between 1 and 65535")
+
+
+def _validate_web_port(web_port: int) -> None:
+    """Raise ``ValueError`` if ``web_port`` is outside 0..65535."""
+    if isinstance(web_port, bool) or web_port < 0 or web_port > 65535:
+        raise ValueError("web_port must be between 0 and 65535 (0 disables it)")
