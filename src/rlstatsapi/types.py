@@ -1,9 +1,4 @@
-"""
-Static typing layer for documented Rocket League event payloads.
-
-TypedDicts here mirror the official event schema and are designed for IDE
-autocomplete and type-checking, without adding runtime parsing overhead.
-"""
+"""Static typing definitions for documented Rocket League Stats API payloads."""
 
 from __future__ import annotations
 
@@ -14,8 +9,8 @@ from typing import (
     Literal,
     Mapping,
     TypeAlias,
-    TypeVar,
     TypedDict,
+    TypeVar,
     cast,
     overload,
 )
@@ -44,18 +39,24 @@ EventName: TypeAlias = Literal[
 
 
 class Vector3(TypedDict):
+    """3D coordinate vector in world space."""
+
     X: float
     Y: float
     Z: float
 
 
 class PlayerRef(TypedDict):
+    """Compact player reference used in event payloads."""
+
     Name: str
     Shortcut: int
     TeamNum: int
 
 
 class TeamState(TypedDict):
+    """Team score and color metadata inside ``UpdateState``."""
+
     Name: str
     TeamNum: int
     Score: int
@@ -64,23 +65,31 @@ class TeamState(TypedDict):
 
 
 class BallState(TypedDict):
+    """Ball speed and last-touch team inside ``UpdateState``."""
+
     Speed: float
     TeamNum: int
 
 
 class PlayerAttacker(TypedDict):
+    """Attacker reference attached when a player is demolished."""
+
     Name: str
     Shortcut: int
     TeamNum: int
 
 
 class TargetRef(TypedDict):
+    """Current camera target reference inside ``UpdateState``."""
+
     Name: str
     Shortcut: int
     TeamNum: int
 
 
 class UpdateStatePlayer(TypedDict, total=False):
+    """Per-player dictionary entry inside ``UpdateState.Players``."""
+
     Name: str
     PrimaryId: str
     Shortcut: int
@@ -106,6 +115,8 @@ class UpdateStatePlayer(TypedDict, total=False):
 
 
 class UpdateStateGame(TypedDict, total=False):
+    """Game-state dictionary inside ``UpdateState.Game``."""
+
     Teams: list[TeamState]
     TimeSeconds: int
     bOvertime: bool
@@ -121,39 +132,53 @@ class UpdateStateGame(TypedDict, total=False):
 
 
 class UpdateStatePayload(TypedDict, total=False):
+    """Payload schema for ``UpdateState``."""
+
     MatchGuid: str
     Players: list[UpdateStatePlayer]
     Game: UpdateStateGame
 
 
 class BallHitBall(TypedDict):
+    """Ball speed and location fields inside ``BallHit``."""
+
     PreHitSpeed: float
     PostHitSpeed: float
     Location: Vector3
 
 
 class BallHitPayload(TypedDict, total=False):
+    """Payload schema for ``BallHit``."""
+
     MatchGuid: str
     Players: list[PlayerRef]
     Ball: BallHitBall
 
 
 class ClockUpdatedSecondsPayload(TypedDict, total=False):
+    """Payload schema for ``ClockUpdatedSeconds``."""
+
     MatchGuid: str
     TimeSeconds: int
     bOvertime: bool
 
 
 class CountdownBeginPayload(TypedDict, total=False):
+    """Payload schema for ``CountdownBegin``."""
+
     MatchGuid: str
 
 
 class BallLastTouch(TypedDict):
+    """Player and speed of the most recent ball touch."""
+
     Player: PlayerRef
     Speed: float
 
 
 class CrossbarHitPayload(TypedDict, total=False):
+    """Payload schema for ``CrossbarHit``."""
+
     MatchGuid: str
     BallLocation: Vector3
     BallSpeed: float
@@ -162,18 +187,26 @@ class CrossbarHitPayload(TypedDict, total=False):
 
 
 class GoalReplayEndPayload(TypedDict, total=False):
+    """Payload schema for ``GoalReplayEnd``."""
+
     MatchGuid: str
 
 
 class GoalReplayStartPayload(TypedDict, total=False):
+    """Payload schema for ``GoalReplayStart``."""
+
     MatchGuid: str
 
 
 class GoalReplayWillEndPayload(TypedDict, total=False):
+    """Payload schema for ``GoalReplayWillEnd``."""
+
     MatchGuid: str
 
 
 class GoalScoredPayload(TypedDict, total=False):
+    """Payload schema for ``GoalScored``."""
+
     MatchGuid: str
     GoalSpeed: float
     GoalTime: float
@@ -184,43 +217,63 @@ class GoalScoredPayload(TypedDict, total=False):
 
 
 class MatchCreatedPayload(TypedDict, total=False):
+    """Payload schema for ``MatchCreated``."""
+
     MatchGuid: str
 
 
 class MatchInitializedPayload(TypedDict, total=False):
+    """Payload schema for ``MatchInitialized``."""
+
     MatchGuid: str
 
 
 class MatchDestroyedPayload(TypedDict, total=False):
+    """Payload schema for ``MatchDestroyed``."""
+
     MatchGuid: str
 
 
 class MatchEndedPayload(TypedDict, total=False):
+    """Payload schema for ``MatchEnded``."""
+
     MatchGuid: str
     WinnerTeamNum: int
 
 
 class MatchPausedPayload(TypedDict, total=False):
+    """Payload schema for ``MatchPaused``."""
+
     MatchGuid: str
 
 
 class MatchUnpausedPayload(TypedDict, total=False):
+    """Payload schema for ``MatchUnpaused``."""
+
     MatchGuid: str
 
 
 class PodiumStartPayload(TypedDict, total=False):
+    """Payload schema for ``PodiumStart``."""
+
     MatchGuid: str
 
 
 class ReplayCreatedPayload(TypedDict, total=False):
+    """Payload schema for ``ReplayCreated``."""
+
     MatchGuid: str
 
 
 class RoundStartedPayload(TypedDict, total=False):
+    """Payload schema for ``RoundStarted``."""
+
     MatchGuid: str
 
 
 class StatfeedEventPayload(TypedDict, total=False):
+    """Payload schema for ``StatfeedEvent``."""
+
     MatchGuid: str
     EventName: str
     Type: str
@@ -257,7 +310,13 @@ TData = TypeVar("TData", bound=Mapping[str, Any])
 
 @dataclass(slots=True)
 class TypedEventMessage(Generic[TData]):
-    """Typed event envelope used by helpers and typed convenience callbacks."""
+    """Event envelope parameterized by its specific payload ``TypedDict``.
+
+    Attributes:
+        event: Event name string.
+        data: Typed payload mapping for the event.
+        raw: Optional raw JSON string from the stream.
+    """
 
     event: str
     data: TData
@@ -386,7 +445,14 @@ def cast_event_data(event_name: str, data: Mapping[str, Any]) -> Mapping[str, An
 
 
 def cast_event_data(event_name: str, data: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Type-only helper to narrow `data` based on event name."""
+    """Narrow ``data`` to the ``TypedDict`` matching ``event_name`` without runtime cost.
 
+    Args:
+        event_name: Rocket League event name.
+        data: Decoded payload mapping from ``EventMessage.data``.
+
+    Returns:
+        Mapping[str, Any]: The unmodified ``data`` mapping with narrowed static type.
+    """
     _ = event_name
     return cast(Mapping[str, Any], data)

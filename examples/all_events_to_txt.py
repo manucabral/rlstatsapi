@@ -2,8 +2,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime
+from typing import Any
 
-from rlstatsapi import StatsClient
+from rlstatsapi import EventMessage, StatsClient
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,12 +22,12 @@ async def main() -> None:
     client.on_connect(lambda: logging.info("Connected and writing to %s", OUTPUT_FILE))
     client.on_disconnect(lambda: logging.info("Disconnected"))
 
-    def on_error(event_name: str, exc: Exception) -> None:
-        logging.error("Handler error for %s: %s", event_name, exc)
+    def on_error(msg: EventMessage, exc: Exception, _handler: Any) -> None:
+        logging.error("Handler error for %s: %s", msg.event, exc)
 
     client.on_handler_error(on_error)
 
-    def log_event(msg) -> None:
+    def log_event(msg: EventMessage) -> None:
         payload_pretty = json.dumps(
             msg.data, ensure_ascii=False, indent=2, sort_keys=True
         )

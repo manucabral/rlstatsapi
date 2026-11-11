@@ -1,8 +1,6 @@
-"""
-Known Rocket League Stats API event names.
-Sources:
-    https://www.rocketleague.com/en/developer/stats-api
-"""
+"""Documented Rocket League Stats API event names."""
+
+from __future__ import annotations
 
 KNOWN_EVENTS: frozenset[str] = frozenset(
     {

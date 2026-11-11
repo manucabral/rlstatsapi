@@ -1,10 +1,11 @@
-"""Unit coverage for client parsing, filtering, and convenience helpers."""
+"""Unit tests for client parsing, framing, lifecycle, handlers, and state tracking."""
 
 # pylint: disable=protected-access
 
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime
 from typing import Any, Callable
 
@@ -30,16 +31,18 @@ def test_parse_message_decodes_string_data_payload() -> None:
     assert message.raw == "{}"
 
 
-def test_event_message_as_type_exposes_typed_data() -> None:
+def test_event_message_as_type_exposes_typed_data_and_preserves_raw() -> None:
     message = EventMessage(
         event="GoalScored",
         data={"Scorer": {"Name": "PlayerA", "Shortcut": 1, "TeamNum": 0}},
+        raw='{"Event":"GoalScored"}',
     )
 
     typed_message = message.as_type("GoalScored")
 
     assert typed_message.event == "GoalScored"
     assert typed_message.data["Scorer"]["Name"] == "PlayerA"
+    assert typed_message.raw == '{"Event":"GoalScored"}'
 
 
 @pytest.mark.asyncio
@@ -78,16 +81,33 @@ def test_off_removes_specific_handler() -> None:
     assert handler not in client._handlers_by_event["GoalScored"]
 
 
-def test_off_any_removes_global_handler() -> None:
+def test_off_any_and_lifecycle_off_remove_handlers() -> None:
     client = StatsClient(reconnect=False)
 
     def handler(_: EventMessage) -> None:
         return None
 
+    def simple() -> None:
+        return None
+
+    def err_handler(
+        _msg: EventMessage, _exc: Exception, _fn: Callable[..., Any]
+    ) -> None:
+        return None
+
     client.on_any(handler)
     client.off_any(handler)
+    client.on_connect(simple)
+    client.off_connect(simple)
+    client.on_disconnect(simple)
+    client.off_disconnect(simple)
+    client.on_handler_error(err_handler)
+    client.off_handler_error(err_handler)
 
     assert handler not in client._handlers_any
+    assert simple not in client._on_connect_handlers
+    assert simple not in client._on_disconnect_handlers
+    assert err_handler not in client._error_handlers
 
 
 @pytest.mark.asyncio
@@ -131,15 +151,64 @@ async def test_events_no_filter_yields_all() -> None:
 @pytest.mark.asyncio
 async def test_overflow_drop_increments_dropped_metric() -> None:
     client = StatsClient(reconnect=False, queue_size=1, overflow="drop")
-    client._queue.put_nowait(EventMessage(event="A", data={}))
+    await client._enqueue_message(EventMessage(event="A", data={}))
+    await client._enqueue_message(EventMessage(event="B", data={}))
 
-    try:
-        client._queue.put_nowait(EventMessage(event="B", data={}))
-        client._metrics.queued_events += 1
-    except asyncio.QueueFull:
-        client._metrics.dropped_events += 1
+    assert client.metrics.queued_events == 1
+    assert client.metrics.dropped_events == 1
 
-    assert client._metrics.dropped_events == 1
+
+@pytest.mark.asyncio
+async def test_callback_only_mode_does_not_deadlock_when_exceeding_queue_size() -> None:
+    client = StatsClient(reconnect=False, queue_size=2, overflow="block")
+    received: list[int] = []
+
+    client.on("Tick", lambda msg: received.append(msg.data["i"]))
+
+    reader = asyncio.StreamReader()
+    for i in range(10):
+        payload = json.dumps({"Event": "Tick", "Data": {"i": i}}) + "\n"
+        reader.feed_data(payload.encode("utf-8"))
+    reader.feed_eof()
+
+    with pytest.raises(ConnectionAbortedError):
+        await asyncio.wait_for(client._read_loop(reader), timeout=1.0)
+
+    assert received == list(range(10))
+    assert client._queue.qsize() == 2
+
+
+@pytest.mark.asyncio
+async def test_read_loop_preserves_multibyte_utf8_across_chunks() -> None:
+    client = StatsClient(reconnect=False, include_raw=True)
+    names: list[str] = []
+    client.on(
+        "GoalScored",
+        lambda msg: names.append(msg.data["Scorer"]["Name"]),
+    )
+
+    frame = json.dumps(
+        {
+            "Event": "GoalScored",
+            "Data": {"Scorer": {"Name": "Münü_⚽_火箭", "Shortcut": 0, "TeamNum": 0}},
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    # Split right inside the 4-byte emoji / multibyte sequence
+    emoji_index = frame.index("⚽".encode("utf-8")) + 1
+    part1, part2 = frame[:emoji_index], frame[emoji_index:]
+
+    reader = asyncio.StreamReader()
+    reader.feed_data(part1)
+    await asyncio.sleep(0)
+    reader.feed_data(part2 + b"\n")
+    reader.feed_eof()
+
+    with pytest.raises(ConnectionAbortedError):
+        await asyncio.wait_for(client._read_loop(reader), timeout=1.0)
+
+    assert names == ["Münü_⚽_火箭"]
 
 
 @pytest.mark.asyncio
@@ -167,9 +236,23 @@ async def test_on_handler_error_called_on_handler_exception() -> None:
     assert errors[0][2] is bad_handler
 
 
-def test_reconnect_delay_zero_raises() -> None:
+def test_init_parameter_validation() -> None:
     with pytest.raises(ValueError, match="reconnect_delay"):
         StatsClient(reconnect_delay=0)
+    with pytest.raises(ValueError, match="port"):
+        StatsClient(port=0)
+    with pytest.raises(ValueError, match="port"):
+        StatsClient(port=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="queue_size"):
+        StatsClient(queue_size=0)
+    with pytest.raises(ValueError, match="max_reconnect_delay"):
+        StatsClient(reconnect_delay=5.0, max_reconnect_delay=1.0)
+    with pytest.raises(ValueError, match="overflow"):
+        StatsClient(overflow="invalid")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="connect_timeout"):
+        StatsClient(connect_timeout=0)
+    with pytest.raises(ValueError, match="handler_timeout"):
+        StatsClient(handler_timeout=0)
 
 
 def test_state_tracker_updates_from_update_state() -> None:
@@ -199,10 +282,52 @@ def test_state_tracker_updates_from_update_state() -> None:
     assert client.state.arena == "Stadium_P"
 
 
+def test_state_tracker_handles_clock_replay_and_destroy_events() -> None:
+    client = StatsClient(reconnect=False)
+    tracker = client._state_tracker
+
+    tracker.update(
+        EventMessage(
+            event="ClockUpdatedSeconds",
+            data={"MatchGuid": "m1", "TimeSeconds": 45, "bOvertime": True},
+        )
+    )
+    assert client.state.match_guid == "m1"
+    assert client.state.time_seconds == 45
+    assert client.state.overtime is True
+
+    tracker.update(EventMessage(event="GoalReplayStart", data={}))
+    assert client.state.replay_active is True
+
+    tracker.update(EventMessage(event="GoalReplayEnd", data={}))
+    assert client.state.replay_active is False
+
+    tracker.update(EventMessage(event="MatchDestroyed", data={}))
+    assert client.state.match_guid is None
+    assert client.state.last_event == "MatchDestroyed"
+    assert client.state.event_counts == {"MatchDestroyed": 1}
+
+
 def test_connection_state_starts_disconnected() -> None:
     client = StatsClient(reconnect=False)
     assert client.connection_state == ConnectionState.DISCONNECTED
     assert not client.is_connected
+
+
+@pytest.mark.asyncio
+async def test_connection_state_resets_to_disconnected_after_failed_connect() -> None:
+    client = StatsClient(
+        host="127.0.0.1",
+        port=1,
+        reconnect=False,
+        connect_timeout=0.2,
+    )
+    await client.connect()
+    assert client._reader_task is not None
+    await asyncio.wait_for(client._reader_task, timeout=2.0)
+
+    assert client.connection_state == ConnectionState.DISCONNECTED
+    assert client.last_error is not None
 
 
 def test_metrics_reset_clears_counters() -> None:
@@ -243,27 +368,36 @@ async def test_wait_for_raises_timeout_when_event_never_arrives() -> None:
 
 
 @pytest.mark.asyncio
-async def test_wait_for_cleans_up_handler_on_timeout() -> None:
+async def test_wait_for_cleans_up_handler_on_timeout_and_cancellation() -> None:
     client = StatsClient(reconnect=False)
     with pytest.raises(asyncio.TimeoutError):
         await client.wait_for("GoalScored", timeout=0.05)
     assert len(client._handlers_by_event["GoalScored"]) == 0
 
+    task = asyncio.create_task(client.wait_for("GoalScored"))
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert len(client._handlers_by_event["GoalScored"]) == 0
+
 
 @pytest.mark.asyncio
-async def test_handler_timeout_cancels_slow_async_handler() -> None:
-    client = StatsClient(reconnect=False, handler_timeout=0.05)
+async def test_handler_timeout_cancels_slow_async_handler_and_decorator() -> None:
+    client = StatsClient(reconnect=False, handler_timeout=0.03)
     finished = False
 
+    @client.on("GoalScored")
     async def slow_handler(_: EventMessage) -> None:
         nonlocal finished
         await asyncio.sleep(10)
         finished = True
 
-    client.on("GoalScored", slow_handler)
     await client._dispatch(EventMessage(event="GoalScored", data={}))
     assert not finished
     assert client.metrics.handler_errors == 1
+    client.off("GoalScored", slow_handler)
+    assert len(client._handlers_by_event["GoalScored"]) == 0
 
 
 def test_state_tracker_populates_players() -> None:

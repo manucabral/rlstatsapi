@@ -1,4 +1,4 @@
-"""Command-line entrypoint for common rlstatsapi setup and debugging tasks."""
+"""Command-line interface for ``rlstatsapi`` configuration and live listening."""
 
 from __future__ import annotations
 
@@ -19,14 +19,21 @@ from .config import (
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Parse CLI args and dispatch the requested command."""
+    """Parse CLI arguments and run the selected subcommand.
+
+    Args:
+        argv: Optional list of CLI arguments. Defaults to ``sys.argv[1:]``.
+
+    Returns:
+        int: Process exit code.
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
     return args.func(args)
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the top-level argument parser with all subcommands."""
+    """Create the top-level argument parser and register subcommands."""
     parser = argparse.ArgumentParser(prog="rlstatsapi")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -88,14 +95,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_status(args: argparse.Namespace) -> int:
-    """Print the current TAStatsAPI.ini config as JSON."""
+    """Print the current ``TAStatsAPI.ini`` status as formatted JSON."""
     status = get_stats_api_status(args.path)
     print(json.dumps(asdict(status), indent=2))
     return 0
 
 
 def _run_enable(args: argparse.Namespace) -> int:
-    """Enable the Stats API exporter in TAStatsAPI.ini and print the result."""
+    """Enable the Stats API exporter in ``TAStatsAPI.ini`` and print the result."""
     status = configure_stats_api(
         enabled=True,
         port=args.port,
@@ -108,7 +115,7 @@ def _run_enable(args: argparse.Namespace) -> int:
 
 
 def _run_disable(args: argparse.Namespace) -> int:
-    """Disable the Stats API exporter in TAStatsAPI.ini and print the result."""
+    """Disable the Stats API exporter in ``TAStatsAPI.ini`` and print the result."""
     status = configure_stats_api(
         enabled=False,
         port=args.port,
@@ -121,12 +128,12 @@ def _run_disable(args: argparse.Namespace) -> int:
 
 
 def _run_listen(args: argparse.Namespace) -> int:
-    """Bridge the sync CLI entry point into the async ``_listen`` coroutine."""
+    """Run the async ``_listen`` coroutine from the synchronous CLI handler."""
     return asyncio.run(_listen(args))
 
 
 async def _listen(args: argparse.Namespace) -> int:
-    """Connect to the local Stats API and stream events to stdout until Ctrl+C."""
+    """Connect to the local Stats API and print incoming events until interrupted."""
     async with StatsClient(
         host=args.host,
         port=args.port,

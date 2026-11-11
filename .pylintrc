@@ -19,7 +19,8 @@ disable=
 max-line-length=100
 
 [DESIGN]
-max-args=12
-max-positional-arguments=12
+max-args=14
+max-positional-arguments=14
 max-attributes=20
-max-public-methods=40
+max-public-methods=45
+max-module-lines=1500

@@ -1,73 +1,123 @@
-"""
-Lightweight helpers for tracking a match summary from the live event stream.
-
-The goal here is convenience, not full replay-state reconstruction. The tracker
-keeps the handful of fields that most HUDs, overlays, bots, and dashboards want
-without forcing users to rebuild the same state cache in every script.
-"""
+"""State tracker that maintains a rolling match summary from live events."""
 
 from __future__ import annotations
+
+from typing import Any, TypeGuard
 
 from .models import EventMessage, MatchStateSnapshot, PlayerSnapshot
 
 
+def _is_int(value: object) -> TypeGuard[int]:
+    """Return ``True`` when ``value`` is an ``int`` and not a ``bool``."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _int_or_zero(value: object) -> int:
+    """Return ``value`` when it is a non-boolean ``int``, otherwise ``0``."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _build_player_snapshot(player: dict[str, Any]) -> PlayerSnapshot | None:
+    """Build a ``PlayerSnapshot`` from one ``UpdateState.Players`` entry."""
+    name = player.get("Name")
+    shortcut = player.get("Shortcut")
+    if not isinstance(name, str) or not _is_int(shortcut):
+        return None
+    team_num = player.get("TeamNum")
+    raw_speed = player.get("Speed")
+    speed = (
+        float(raw_speed)
+        if isinstance(raw_speed, (int, float)) and not isinstance(raw_speed, bool)
+        else 0.0
+    )
+    return PlayerSnapshot(
+        name=name,
+        shortcut=shortcut,
+        team_num=team_num if _is_int(team_num) else 0,
+        score=_int_or_zero(player.get("Score")),
+        goals=_int_or_zero(player.get("Goals")),
+        assists=_int_or_zero(player.get("Assists")),
+        saves=_int_or_zero(player.get("Saves")),
+        shots=_int_or_zero(player.get("Shots")),
+        boost=_int_or_zero(player.get("Boost")),
+        speed=speed,
+        is_demolished=bool(player.get("bDemolished", False)),
+    )
+
+
 class MatchStateTracker:
-    """Maintain a rolling summary of the latest match state seen by the client."""
+    """Maintain a rolling summary of the active match from incoming events."""
 
     def __init__(self) -> None:
+        """Initialize the tracker with an empty ``MatchStateSnapshot``."""
         self._snapshot = MatchStateSnapshot()
 
     @property
     def snapshot(self) -> MatchStateSnapshot:
-        """Return the mutable snapshot object updated by incoming events."""
+        """Current mutable match snapshot updated by ``update()``."""
         return self._snapshot
 
     def reset(self) -> None:
-        """Clear the current snapshot when a match ends or the caller wants a reset."""
+        """Replace the current snapshot with a fresh ``MatchStateSnapshot``."""
         self._snapshot = MatchStateSnapshot()
 
     def update(self, message: EventMessage) -> MatchStateSnapshot:
-        """Apply one incoming event and return the updated snapshot."""
-        snapshot = self._snapshot
-        snapshot.last_event = message.event
-        snapshot.event_counts[message.event] = (
-            snapshot.event_counts.get(message.event, 0) + 1
-        )
+        """Apply one incoming event and return the updated snapshot.
 
-        match_guid = message.data.get("MatchGuid")
+        Args:
+            message: Normalized event message from the stream.
+
+        Returns:
+            MatchStateSnapshot: The updated match state snapshot.
+        """
+        event = message.event
+        if event == "MatchDestroyed":
+            self.reset()
+            snapshot = self._snapshot
+            snapshot.last_event = event
+            snapshot.event_counts[event] = 1
+            return snapshot
+
+        snapshot = self._snapshot
+        snapshot.last_event = event
+        counts = snapshot.event_counts
+        counts[event] = counts.get(event, 0) + 1
+
+        data = message.data
+        match_guid = data.get("MatchGuid")
         if isinstance(match_guid, str) and match_guid:
             snapshot.match_guid = match_guid
 
-        if message.event == "UpdateState":
-            self._apply_update_state(snapshot, message)
-
-        elif message.event == "GoalScored":
-            self._apply_goal_scored(snapshot, message)
-
-        elif message.event == "MatchEnded":
+        if event == "UpdateState":
+            self._apply_update_state(snapshot, data)
+        elif event == "ClockUpdatedSeconds":
+            self._apply_clock_updated(snapshot, data)
+        elif event == "GoalScored":
+            self._apply_goal_scored(snapshot, data)
+        elif event == "GoalReplayStart":
+            snapshot.replay_active = True
+        elif event == "GoalReplayEnd":
+            snapshot.replay_active = False
+        elif event == "MatchEnded":
             snapshot.has_winner = True
-
-        elif message.event == "MatchDestroyed":
-            self.reset()
-            snapshot = self._snapshot
 
         return snapshot
 
     def _apply_update_state(
         self,
         snapshot: MatchStateSnapshot,
-        message: EventMessage,
+        data: dict[str, Any],
     ) -> None:
-        """Extract game-level fields from an UpdateState payload into the snapshot."""
-        game = message.data.get("Game", {})
+        """Extract game, team, and player fields from an ``UpdateState`` payload."""
+        game = data.get("Game")
         if not isinstance(game, dict):
             return
 
-        self._apply_teams(snapshot, game.get("Teams", []))
-        self._apply_players(snapshot, message.data.get("Players", []), game)
+        self._apply_teams(snapshot, game.get("Teams"))
+        self._apply_players(snapshot, data.get("Players"), game)
 
         time_seconds = game.get("TimeSeconds")
-        if isinstance(time_seconds, int):
+        if _is_int(time_seconds):
             snapshot.time_seconds = time_seconds
 
         snapshot.overtime = bool(game.get("bOvertime", False))
@@ -82,8 +132,20 @@ class MatchStateTracker:
         if isinstance(winner, str) and winner:
             snapshot.winner = winner
 
+    def _apply_clock_updated(
+        self,
+        snapshot: MatchStateSnapshot,
+        data: dict[str, Any],
+    ) -> None:
+        """Update clock seconds and overtime flag from ``ClockUpdatedSeconds``."""
+        time_seconds = data.get("TimeSeconds")
+        if _is_int(time_seconds):
+            snapshot.time_seconds = time_seconds
+        if "bOvertime" in data:
+            snapshot.overtime = bool(data.get("bOvertime", False))
+
     def _apply_teams(self, snapshot: MatchStateSnapshot, teams: object) -> None:
-        """Update blue/orange score from the Teams list in an UpdateState payload."""
+        """Update blue and orange scores from the ``Teams`` list."""
         if not isinstance(teams, list):
             return
 
@@ -92,73 +154,61 @@ class MatchStateTracker:
                 continue
             team_num = team.get("TeamNum")
             score = team.get("Score")
-            if team_num == 0 and isinstance(score, int):
+            if not _is_int(score):
+                continue
+            if team_num == 0:
                 snapshot.blue_score = score
-            if team_num == 1 and isinstance(score, int):
+            elif team_num == 1:
                 snapshot.orange_score = score
 
     def _apply_players(
         self,
         snapshot: MatchStateSnapshot,
         players: object,
-        game: dict,
+        game: dict[str, Any],
     ) -> None:
-        """Rebuild the players list and resolve target_player from UpdateState."""
+        """Rebuild the player list and resolve ``target_player``."""
         if not isinstance(players, list):
             snapshot.players = []
             snapshot.target_player = None
             return
 
-        result: list[PlayerSnapshot] = []
-        for p in players:
-            if not isinstance(p, dict):
-                continue
-            name = p.get("Name")
-            shortcut = p.get("Shortcut")
-            team_num = p.get("TeamNum")
-            if not isinstance(name, str) or not isinstance(shortcut, int):
-                continue
-            result.append(
-                PlayerSnapshot(
-                    name=name,
-                    shortcut=shortcut,
-                    team_num=team_num if isinstance(team_num, int) else 0,
-                    score=p.get("Score") or 0,
-                    goals=p.get("Goals") or 0,
-                    assists=p.get("Assists") or 0,
-                    saves=p.get("Saves") or 0,
-                    shots=p.get("Shots") or 0,
-                    boost=p.get("Boost") or 0,
-                    speed=float(p.get("Speed") or 0.0),
-                    is_demolished=bool(p.get("bDemolished", False)),
-                )
-            )
-        snapshot.players = result
-
-        target_player: PlayerSnapshot | None = None
+        target_shortcut: int | None = None
         if game.get("bHasTarget"):
             target = game.get("Target")
             if isinstance(target, dict):
-                target_shortcut = target.get("Shortcut")
-                if isinstance(target_shortcut, int):
-                    for player in result:
-                        if player.shortcut == target_shortcut:
-                            target_player = player
-                            break
+                raw_target = target.get("Shortcut")
+                if _is_int(raw_target):
+                    target_shortcut = raw_target
+
+        result: list[PlayerSnapshot] = []
+        target_player: PlayerSnapshot | None = None
+
+        for entry in players:
+            if not isinstance(entry, dict):
+                continue
+            player_snapshot = _build_player_snapshot(entry)
+            if player_snapshot is None:
+                continue
+            result.append(player_snapshot)
+            if target_player is None and player_snapshot.shortcut == target_shortcut:
+                target_player = player_snapshot
+
+        snapshot.players = result
         snapshot.target_player = target_player
 
     def _apply_goal_scored(
         self,
         snapshot: MatchStateSnapshot,
-        message: EventMessage,
+        data: dict[str, Any],
     ) -> None:
-        """Update last scorer name and goal speed from a GoalScored payload."""
-        scorer = message.data.get("Scorer", {})
+        """Update last scorer name and goal speed from a ``GoalScored`` payload."""
+        scorer = data.get("Scorer")
         if isinstance(scorer, dict):
             name = scorer.get("Name")
             if isinstance(name, str) and name:
                 snapshot.last_scorer = name
 
-        goal_speed = message.data.get("GoalSpeed")
-        if isinstance(goal_speed, (int, float)):
+        goal_speed = data.get("GoalSpeed")
+        if isinstance(goal_speed, (int, float)) and not isinstance(goal_speed, bool):
             snapshot.last_goal_speed = float(goal_speed)

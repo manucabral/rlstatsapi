@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -38,16 +39,20 @@ def test_get_stats_api_status_reads_values(tmp_path: Path) -> None:
     assert status.port == 5000
 
 
-def test_get_stats_api_status_missing_keys(tmp_path: Path) -> None:
+def test_get_stats_api_status_section_header_emits_no_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     config_path = tmp_path / "TAStatsAPI.ini"
     _write_config(config_path, "[TAGame.MatchStatsExporter_TA]\n")
 
-    status = get_stats_api_status(config_path)
+    with caplog.at_level(logging.WARNING, logger="rlstatsapi.config"):
+        status = get_stats_api_status(config_path)
 
     assert status.found is True
     assert status.enabled is False
     assert status.packet_send_rate is None
     assert status.port is None
+    assert not caplog.records
 
 
 def test_set_stats_api_enabled_true_writes_positive_rate(tmp_path: Path) -> None:
@@ -72,13 +77,16 @@ def test_set_stats_api_enabled_false_writes_zero(tmp_path: Path) -> None:
     assert "PacketSendRate=0" in config_path.read_text(encoding="utf-8")
 
 
-def test_set_stats_api_port_preserves_other_content(tmp_path: Path) -> None:
+def test_set_stats_api_port_preserves_other_content_and_deduplicates(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "TAStatsAPI.ini"
     original = (
         "; comment\n"
         "[TAGame.MatchStatsExporter_TA]\n"
         "PacketSendRate=30\n"
         "Port=49123\n"
+        "Port=49999\n"
         "OtherSetting=keepme\n"
     )
     _write_config(config_path, original)
@@ -88,6 +96,7 @@ def test_set_stats_api_port_preserves_other_content(tmp_path: Path) -> None:
 
     assert status.port == 60000
     assert "OtherSetting=keepme" in updated
+    assert updated.count("Port=") == 1
     assert "Port=60000" in updated
 
 

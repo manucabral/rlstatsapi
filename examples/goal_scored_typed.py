@@ -13,7 +13,7 @@ async def on_goal(msg: TypedEventMessage[GoalScoredPayload]) -> None:
 
     line = f"GOAL by {name} ({speed:.0f} km/h)"
     if assist_name:
-        line += f"assist: {assist_name}"
+        line += f" assist: {assist_name}"
     print(line)
 
 

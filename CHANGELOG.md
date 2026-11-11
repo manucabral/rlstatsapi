@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.7
+
+### Added
+- `StatsClient(track_state=True)` option to toggle automatic `MatchStateSnapshot` tracking
+- `StatsClient.off_connect(handler)`, `off_disconnect(handler)`, and `off_handler_error(handler)` unregistration methods
+- Constructor argument validation for `port`, `reconnect_delay`, `max_reconnect_delay`, `max_reconnect_attempts`, `queue_size`, `overflow`, `connect_timeout`, and `handler_timeout`
+
+### Fixed
+- Queue deadlock when operating in callback-only mode without consuming `events()`
+- Memory and handler leak in `wait_for()` when cancelled before the expected event arrives
+- `handler_timeout` bypass for coroutines registered with `@client.on(...)` or `client.once(...)`
+- UTF-8 multibyte boundary corruption across TCP stream chunks using `codecs.getincrementaldecoder`
+- `ConnectionState` remaining in `CONNECTING` after initial connection failure with `reconnect=False`
+- False warning when parsing `[TAGame.MatchStatsExporter_TA]` section headers in `TAStatsAPI.ini`
+- Duplicate keys in `TAStatsAPI.ini` when saving settings
+- `EventMessage.as_type()` dropping the `raw` transport string
+- `MatchStateTracker` missing updates for `ClockUpdatedSeconds`, `GoalReplayStart`, and `GoalReplayEnd`, and losing `event_counts` on `MatchDestroyed`
+- Example handler signature in `examples/all_events_to_txt.py` and assist text formatting in `examples/goal_scored_typed.py`
+
+### Improved
+- TCP JSON stream decoding performance using cursor-based `raw_decode`, reducing decoding memory peak by ~18x
+- Standardized all module, class, and method docstrings to Google style
+- Increased unit test suite coverage from 32 to 36 tests
+
 ## 0.1.6
 
 ### Added

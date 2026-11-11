@@ -1,9 +1,4 @@
-"""Helpers for reading and updating Rocket League's TAStatsAPI.ini.
-
-This module keeps file management separate from the network client so users can
-prepare the game config before starting Rocket League and then connect with
-``StatsClient`` using the same port.
-"""
+"""Helpers for reading and updating Rocket League's ``TAStatsAPI.ini`` file."""
 
 from __future__ import annotations
 
@@ -26,7 +21,17 @@ _WARNING = (
 
 @dataclass(slots=True)
 class StatsAPIConfigStatus:
-    """Snapshot of the current Stats API config file state."""
+    """Snapshot of the Rocket League Stats API configuration file state.
+
+    Attributes:
+        found: Whether the target ``TAStatsAPI.ini`` file exists on disk.
+        enabled: ``True`` when ``PacketSendRate`` is present and greater than 0.
+        path: Resolved file path as a string, or ``None`` if not found.
+        packet_send_rate: Parsed ``PacketSendRate`` value, or ``None``.
+        port: Parsed ``Port`` value, or ``None``.
+        warning: Diagnostic message when the config file was not found.
+        discovery_scope: Discovery strategy label.
+    """
 
     found: bool
     enabled: bool
@@ -38,7 +43,11 @@ class StatsAPIConfigStatus:
 
 
 def candidate_stats_api_paths() -> list[Path]:
-    """Return likely user config locations for ``TAStatsAPI.ini`` on Windows."""
+    """Return candidate user paths for ``TAStatsAPI.ini`` on Windows.
+
+    Returns:
+        list[Path]: Deduplicated list of candidate ``TAStatsAPI.ini`` paths.
+    """
     roots: list[Path] = []
     for env_name in ("USERPROFILE", "HOME"):
         value = os.getenv(env_name)
@@ -81,7 +90,14 @@ def candidate_stats_api_paths() -> list[Path]:
 
 
 def find_stats_api_config(path: str | Path | None = None) -> Path | None:
-    """Resolve an explicit config path or the first matching auto-discovered path."""
+    """Resolve an explicit config path or the first existing auto-discovered path.
+
+    Args:
+        path: Optional explicit path to ``TAStatsAPI.ini``.
+
+    Returns:
+        Path | None: Resolved path if the file exists, otherwise ``None``.
+    """
     if path is not None:
         explicit = Path(path).expanduser().resolve()
         return explicit if explicit.exists() else None
@@ -93,7 +109,14 @@ def find_stats_api_config(path: str | Path | None = None) -> Path | None:
 
 
 def get_stats_api_status(path: str | Path | None = None) -> StatsAPIConfigStatus:
-    """Read the current enabled state, send rate, and port from the config file."""
+    """Read the current enabled state, send rate, and port from ``TAStatsAPI.ini``.
+
+    Args:
+        path: Optional explicit path to ``TAStatsAPI.ini``.
+
+    Returns:
+        StatsAPIConfigStatus: Parsed status snapshot for the config file.
+    """
     config_path = find_stats_api_config(path)
     if config_path is None:
         return StatsAPIConfigStatus(
@@ -112,7 +135,20 @@ def set_stats_api_enabled(
     packet_send_rate: int = DEFAULT_PACKET_SEND_RATE,
     path: str | Path | None = None,
 ) -> StatsAPIConfigStatus:
-    """Write ``PacketSendRate`` and preserve the current port."""
+    """Update ``PacketSendRate`` in ``TAStatsAPI.ini`` and preserve other settings.
+
+    Args:
+        enabled: ``True`` to write ``packet_send_rate``, ``False`` to write ``0``.
+        packet_send_rate: Send rate between 1 and 120 when ``enabled`` is ``True``.
+        path: Optional explicit path to ``TAStatsAPI.ini``.
+
+    Returns:
+        StatsAPIConfigStatus: Updated status read back from disk.
+
+    Raises:
+        ValueError: If ``enabled`` is ``True`` and ``packet_send_rate`` is outside 1..120.
+        FileNotFoundError: If the config file cannot be found.
+    """
     if enabled:
         _validate_packet_send_rate(packet_send_rate)
 
@@ -132,7 +168,19 @@ def set_stats_api_port(
     port: int,
     path: str | Path | None = None,
 ) -> StatsAPIConfigStatus:
-    """Write the local TCP port used by Rocket League's stats exporter."""
+    """Update ``Port`` in ``TAStatsAPI.ini`` and preserve other settings.
+
+    Args:
+        port: TCP port between 1 and 65535.
+        path: Optional explicit path to ``TAStatsAPI.ini``.
+
+    Returns:
+        StatsAPIConfigStatus: Updated status read back from disk.
+
+    Raises:
+        ValueError: If ``port`` is outside 1..65535.
+        FileNotFoundError: If the config file cannot be found.
+    """
     _validate_port(port)
 
     config_path = _require_config_path(path)
@@ -149,7 +197,21 @@ def configure_stats_api(
     packet_send_rate: int = DEFAULT_PACKET_SEND_RATE,
     path: str | Path | None = None,
 ) -> StatsAPIConfigStatus:
-    """Set ``PacketSendRate`` and ``Port`` together in one write operation."""
+    """Update ``PacketSendRate`` and ``Port`` in a single file write.
+
+    Args:
+        enabled: ``True`` to write ``packet_send_rate``, ``False`` to write ``0``.
+        port: TCP port between 1 and 65535.
+        packet_send_rate: Send rate between 1 and 120 when ``enabled`` is ``True``.
+        path: Optional explicit path to ``TAStatsAPI.ini``.
+
+    Returns:
+        StatsAPIConfigStatus: Updated status read back from disk.
+
+    Raises:
+        ValueError: If ``port`` or ``packet_send_rate`` is out of range.
+        FileNotFoundError: If the config file cannot be found.
+    """
     _validate_port(port)
     if enabled:
         _validate_packet_send_rate(packet_send_rate)
@@ -168,7 +230,7 @@ def configure_stats_api(
 
 
 def _require_config_path(path: str | Path | None) -> Path:
-    """Return the resolved config path or raise ``FileNotFoundError`` if not found."""
+    """Return the resolved config path or raise ``FileNotFoundError``."""
     config_path = find_stats_api_config(path)
     if config_path is None:
         raise FileNotFoundError(_WARNING)
@@ -176,7 +238,7 @@ def _require_config_path(path: str | Path | None) -> Path:
 
 
 def _parse_int(value: str | None) -> int | None:
-    """Parse a string to int, returning None on failure or missing input."""
+    """Parse an integer string or return ``None`` when missing or invalid."""
     if value is None:
         return None
     try:
@@ -186,11 +248,15 @@ def _parse_int(value: str | None) -> int | None:
 
 
 def _read_key_values(text: str) -> dict[str, str]:
-    """Parse ``key=value`` pairs from INI-style text, ignoring comments and blank lines."""
+    """Parse ``key=value`` pairs from INI text, ignoring comments and section headers."""
     values: dict[str, str] = {}
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith(("#", ";")):
+        if (
+            not stripped
+            or stripped.startswith(("#", ";"))
+            or (stripped.startswith("[") and stripped.endswith("]"))
+        ):
             continue
         if "=" not in stripped:
             _logger.warning("skipped malformed config line: %r", stripped)
@@ -201,7 +267,7 @@ def _read_key_values(text: str) -> dict[str, str]:
 
 
 def _status_for_path(path: Path) -> StatsAPIConfigStatus:
-    """Build a ``StatsAPIConfigStatus`` by reading and parsing an existing config file."""
+    """Read and parse ``path`` into a ``StatsAPIConfigStatus`` instance."""
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -227,19 +293,26 @@ def _status_for_path(path: Path) -> StatsAPIConfigStatus:
 
 
 def _set_or_append_key(lines: list[str], key: str, value: str) -> list[str]:
-    """Replace an existing ``key=value`` line in-place, or append it if not present."""
+    """Replace an existing ``key=value`` line in-place (deduplicating repeats) or append it."""
     output: list[str] = []
     replaced = False
+    target_key = key.casefold()
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith(("#", ";")) or "=" not in stripped:
+        if (
+            not stripped
+            or stripped.startswith(("#", ";"))
+            or (stripped.startswith("[") and stripped.endswith("]"))
+            or "=" not in stripped
+        ):
             output.append(line)
             continue
         current_key, _current_value = stripped.split("=", 1)
-        if current_key.strip().casefold() == key.casefold():
-            leading = line[: len(line) - len(line.lstrip())]
-            output.append(f"{leading}{key}={value}")
-            replaced = True
+        if current_key.strip().casefold() == target_key:
+            if not replaced:
+                leading = line[: len(line) - len(line.lstrip())]
+                output.append(f"{leading}{key}={value}")
+                replaced = True
         else:
             output.append(line)
     if not replaced:
@@ -248,18 +321,22 @@ def _set_or_append_key(lines: list[str], key: str, value: str) -> list[str]:
 
 
 def _write_lines(path: Path, lines: list[str], original_text: str) -> None:
-    """Write lines back to file, preserving the original trailing newline."""
+    """Write ``lines`` back to ``path``, preserving any trailing newline."""
     newline = "\n" if original_text.endswith(("\n", "\r\n")) else ""
     path.write_text("\n".join(lines) + newline, encoding="utf-8")
 
 
 def _validate_packet_send_rate(packet_send_rate: int) -> None:
-    """Raise ``ValueError`` if packet_send_rate is outside the valid range [1, 120]."""
-    if packet_send_rate < 1 or packet_send_rate > 120:
+    """Raise ``ValueError`` if ``packet_send_rate`` is outside 1..120."""
+    if (
+        isinstance(packet_send_rate, bool)
+        or packet_send_rate < 1
+        or packet_send_rate > 120
+    ):
         raise ValueError("packet_send_rate must be between 1 and 120 when enabled")
 
 
 def _validate_port(port: int) -> None:
-    """Raise ``ValueError`` if port is outside the valid range [1, 65535]."""
-    if port < 1 or port > 65535:
+    """Raise ``ValueError`` if ``port`` is outside 1..65535."""
+    if isinstance(port, bool) or port < 1 or port > 65535:
         raise ValueError("port must be between 1 and 65535")

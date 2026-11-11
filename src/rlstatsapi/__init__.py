@@ -1,9 +1,6 @@
-"""
-Public package surface for rlstatsapi.
+"""Public package interface for ``rlstatsapi``."""
 
-Re-exports the client, envelope model, known event constants, and typed payload
-helpers so consumers can import from `rlstatsapi` directly.
-"""
+from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
