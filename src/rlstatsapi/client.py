@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import codecs
 import contextlib
 import inspect
 import json
@@ -12,12 +11,33 @@ import random
 import re
 from collections import defaultdict
 from enum import Enum
-from typing import Any, AsyncIterator, Awaitable, Callable, Iterable, Literal, overload
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterable,
+    Literal,
+    Mapping,
+    overload,
+)
 
+from .commands import (
+    Perspective,
+    build_command,
+    change_pov,
+    encode_command,
+    load_replay,
+    seek_replay,
+    set_game_speed,
+    set_hud_visibility,
+    set_match_paused,
+)
 from .models import ClientMetrics, EventMessage, MatchStateSnapshot
 from .state import MatchStateTracker
 from .types import (
     BallHitPayload,
+    BoostPickupPayload,
     ClockUpdatedSecondsPayload,
     CountdownBeginPayload,
     CrossbarHitPayload,
@@ -31,6 +51,8 @@ from .types import (
     MatchInitializedPayload,
     MatchPausedPayload,
     MatchUnpausedPayload,
+    PlayerJoinedPayload,
+    PlayerLeftPayload,
     PodiumStartPayload,
     ReplayCreatedPayload,
     RoundStartedPayload,
@@ -50,6 +72,20 @@ _READ_CHUNK_SIZE = 65536
 _MAX_JSON_FIELD_BYTES = 1 << 20  # 1 MiB
 _MAX_BUFFER_BYTES = 4 << 20  # 4 MiB
 _WHITESPACE_RE = re.compile(r"\s*")
+# ``}`` followed by ``{"`` never appears inside one JSON document: between
+# values a comma is required, and inside a string the quote is escaped.
+_FRAME_BOUNDARY_RE = re.compile(rb'\}\s*\{"')
+_OPEN_BRACE = 0x7B
+_CLOSE_BRACE = 0x7D
+try:  # optional accelerator: pip install rlstatsapi[fast]
+    import orjson as _orjson
+
+    _JSON_LOADS: Callable[[Any], Any] = _orjson.loads  # pylint: disable=no-member
+    JSON_BACKEND = "orjson"
+except ImportError:  # pragma: no cover - depends on the environment
+    _JSON_LOADS = json.loads
+    JSON_BACKEND = "json"
+_JSON_DECODE_ERROR = json.JSONDecodeError
 _VALID_OVERFLOW_MODES = frozenset({"block", "drop", "raise"})
 
 
@@ -574,6 +610,48 @@ class StatsClient:
     ]: ...
 
     @overload
+    def on(
+        self,
+        event_name: Literal["BoostPickup"],
+        handler: Callable[
+            [TypedEventMessage[BoostPickupPayload]], Awaitable[None] | None
+        ],
+    ) -> None: ...
+    @overload
+    def on(self, event_name: Literal["BoostPickup"]) -> Callable[
+        [Callable[[TypedEventMessage[BoostPickupPayload]], Awaitable[None] | None]],
+        Callable[[TypedEventMessage[BoostPickupPayload]], Awaitable[None] | None],
+    ]: ...
+
+    @overload
+    def on(
+        self,
+        event_name: Literal["PlayerJoined"],
+        handler: Callable[
+            [TypedEventMessage[PlayerJoinedPayload]], Awaitable[None] | None
+        ],
+    ) -> None: ...
+    @overload
+    def on(self, event_name: Literal["PlayerJoined"]) -> Callable[
+        [Callable[[TypedEventMessage[PlayerJoinedPayload]], Awaitable[None] | None]],
+        Callable[[TypedEventMessage[PlayerJoinedPayload]], Awaitable[None] | None],
+    ]: ...
+
+    @overload
+    def on(
+        self,
+        event_name: Literal["PlayerLeft"],
+        handler: Callable[
+            [TypedEventMessage[PlayerLeftPayload]], Awaitable[None] | None
+        ],
+    ) -> None: ...
+    @overload
+    def on(self, event_name: Literal["PlayerLeft"]) -> Callable[
+        [Callable[[TypedEventMessage[PlayerLeftPayload]], Awaitable[None] | None]],
+        Callable[[TypedEventMessage[PlayerLeftPayload]], Awaitable[None] | None],
+    ]: ...
+
+    @overload
     def on(self, event_name: str, handler: Handler) -> None: ...
     @overload
     def on(self, event_name: str) -> Callable[[Handler], Handler]: ...
@@ -811,6 +889,33 @@ class StatsClient:
         """Register a typed handler for ``StatfeedEvent`` events."""
         self._handlers_by_event["StatfeedEvent"].append(handler)
 
+    def on_boost_pickup(
+        self,
+        handler: Callable[
+            [TypedEventMessage[BoostPickupPayload]], Awaitable[None] | None
+        ],
+    ) -> None:
+        """Register a typed handler for ``BoostPickup`` events."""
+        self._handlers_by_event["BoostPickup"].append(handler)
+
+    def on_player_joined(
+        self,
+        handler: Callable[
+            [TypedEventMessage[PlayerJoinedPayload]], Awaitable[None] | None
+        ],
+    ) -> None:
+        """Register a typed handler for ``PlayerJoined`` events."""
+        self._handlers_by_event["PlayerJoined"].append(handler)
+
+    def on_player_left(
+        self,
+        handler: Callable[
+            [TypedEventMessage[PlayerLeftPayload]], Awaitable[None] | None
+        ],
+    ) -> None:
+        """Register a typed handler for ``PlayerLeft`` events."""
+        self._handlers_by_event["PlayerLeft"].append(handler)
+
     async def events(self, *event_names: str) -> AsyncIterator[EventMessage]:
         """Yield incoming events from the internal queue, optionally filtered by name.
 
@@ -860,6 +965,65 @@ class StatsClient:
             return await asyncio.wait_for(future, timeout=timeout)
         finally:
             self.off(event_name, _handler)
+
+    async def send_command(
+        self,
+        command: Mapping[str, Any] | str,
+        data: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Validate a command and write it to the game over the stats socket.
+
+        The game does not acknowledge commands. Watch the event stream to see
+        the effect (for example ``MatchPaused`` after ``SetMatchPaused``).
+
+        Args:
+            command: Envelope built by ``rlstatsapi.commands`` or a command name.
+            data: Wire-format variables when ``command`` is a name.
+
+        Raises:
+            InvalidCommandError: If the game would reject the command.
+            ConnectionError: If the client is not connected.
+        """
+        payload = encode_command(
+            build_command(command, data) if isinstance(command, str) else command
+        )
+        writer = self._writer
+        if writer is None or self._connection_state != ConnectionState.CONNECTED:
+            raise ConnectionError("StatsClient is not connected")
+        writer.write(payload)
+        await writer.drain()
+
+    async def change_pov(
+        self,
+        focus: int | str | None = None,
+        perspective: Perspective | None = None,
+    ) -> None:
+        """Send ``ChangePOV``: focus ``"Ball"`` or a player shortcut, and/or a camera mode."""
+        await self.send_command(change_pov(focus, perspective))
+
+    async def load_replay(
+        self, file_name: str | None = None, path: str | None = None
+    ) -> None:
+        """Send ``LoadReplay`` by replay file name or file path."""
+        await self.send_command(load_replay(file_name, path))
+
+    async def seek_replay(
+        self, frame: int | None = None, time_seconds: float | None = None
+    ) -> None:
+        """Send ``SeekReplay`` to a frame or a time in seconds."""
+        await self.send_command(seek_replay(frame, time_seconds))
+
+    async def set_game_speed(self, speed: float) -> None:
+        """Send ``SetGameSpeed``. ``1.0`` is normal replay speed."""
+        await self.send_command(set_game_speed(speed))
+
+    async def set_hud_visibility(self, visible: bool) -> None:
+        """Send ``SetHUDVisibility`` to show or hide the in-game HUD."""
+        await self.send_command(set_hud_visibility(visible))
+
+    async def set_match_paused(self, paused: bool) -> None:
+        """Send ``SetMatchPaused`` to pause or resume the match or replay."""
+        await self.send_command(set_match_paused(paused))
 
     async def _close_writer(self, timeout: float = 1.0) -> None:
         """Close the active ``StreamWriter`` and bound ``wait_closed`` by ``timeout``."""
@@ -934,101 +1098,178 @@ class StatsClient:
             await self._close_writer()
             self._logger.debug("tcp socket closed")
 
-    async def _enqueue_message(self, message: EventMessage) -> None:
-        """Push ``message`` into the internal queue according to ``self.overflow``."""
-        if self.overflow == "block":
-            if self._event_consumers > 0:
-                await self._queue.put(message)
-            else:
-                if self._queue.full():
-                    with contextlib.suppress(asyncio.QueueEmpty):
-                        self._queue.get_nowait()
-                self._queue.put_nowait(message)
-            self._metrics.queued_events += 1
-        elif self.overflow == "drop":
-            try:
-                self._queue.put_nowait(message)
-                self._metrics.queued_events += 1
-            except asyncio.QueueFull:
+    def _enqueue_nowait(self, message: EventMessage) -> bool:
+        """Queue ``message`` without awaiting. Return ``False`` if the caller must block."""
+        queue = self._queue
+        overflow = self.overflow
+        if overflow == "block":
+            if queue.full():
+                if self._event_consumers > 0:
+                    return False
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+            queue.put_nowait(message)
+        elif overflow == "drop":
+            if queue.full():
                 self._metrics.dropped_events += 1
                 self._logger.warning("queue full, dropping %s event", message.event)
+                return True
+            queue.put_nowait(message)
         else:
-            self._queue.put_nowait(message)
+            queue.put_nowait(message)
+        self._metrics.queued_events += 1
+        return True
+
+    async def _enqueue_message(self, message: EventMessage) -> None:
+        """Push ``message`` into the internal queue according to ``self.overflow``."""
+        if not self._enqueue_nowait(message):
+            await self._queue.put(message)
             self._metrics.queued_events += 1
-
-    async def _handle_decoded_frame(self, decoded: Any, raw: str) -> None:
-        """Validate one decoded frame, update state, dispatch callbacks, and enqueue."""
-        message = _parse_message_obj(decoded, raw=raw, include_raw=self.include_raw)
-        if message is None:
-            self._logger.debug("ignored invalid message (json/envelope)")
-            return
-
-        self._metrics.received_events += 1
-        if self.track_state:
-            self._state_tracker.update(message)
-
-        await self._dispatch(message)
-        await self._enqueue_message(message)
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
         """Read chunks from the TCP stream, decode JSON frames, and dispatch events."""
-        decoder = json.JSONDecoder()
-        utf8_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        buffer = ""
-
+        read = reader.read
+        consume = self._consume
+        pending = b""
         while not self._stopping:
-            chunk = await reader.read(_READ_CHUNK_SIZE)
+            chunk = await read(_READ_CHUNK_SIZE)
             if not chunk:
-                if "\ufffd" in utf8_decoder.decode(b"", final=True):
-                    self._logger.warning(
-                        "received invalid UTF-8 bytes; replaced with U+FFFD"
-                    )
                 raise ConnectionAbortedError("Socket closed by peer")
+            pending = await consume(pending + chunk if pending else chunk)
 
-            decoded_chunk = utf8_decoder.decode(chunk, final=False)
-            if "\ufffd" in decoded_chunk:
-                self._logger.warning(
-                    "received invalid UTF-8 bytes; replaced with U+FFFD"
-                )
-            buffer = await self._consume_buffer(buffer + decoded_chunk, decoder)
-
-    async def _consume_buffer(self, buffer: str, decoder: json.JSONDecoder) -> str:
-        """Decode all complete JSON objects from ``buffer`` and return the remainder."""
-        raw_decode = decoder.raw_decode
-        ws_match = _WHITESPACE_RE.match
-        include_raw = self.include_raw
-        buf_len = len(buffer)
-        pos = 0
-
-        while pos < buf_len:
-            match = ws_match(buffer, pos)
-            if match is not None:
-                pos = match.end()
-            if pos >= buf_len:
-                break
-
-            if buffer[pos] != "{":
-                next_brace = buffer.find("{", pos)
-                if next_brace == -1:
-                    pos = buf_len
-                    break
-                pos = next_brace
-
+    def _accept(self, decoded: Any, frame: bytes | str) -> EventMessage | None:
+        """Build the message for one decoded frame and update metrics and state."""
+        if type(decoded) is not dict:
+            self._logger.debug("ignored invalid message (json/envelope)")
+            return None
+        event = decoded.get("Event")
+        data = decoded.get("Data")
+        if type(data) is str and len(data) <= _MAX_JSON_FIELD_BYTES:
             try:
-                decoded, end_idx = raw_decode(buffer, pos)
-            except json.JSONDecodeError:
+                data = _JSON_LOADS(data)
+            except ValueError:
+                data = None
+        if type(event) is not str or type(data) is not dict:
+            self._logger.debug("ignored invalid message (json/envelope)")
+            return None
+
+        raw: str | None = None
+        if self.include_raw:
+            raw = frame if type(frame) is str else frame.decode("utf-8", "replace")  # type: ignore[union-attr]
+        message = EventMessage(event, data, raw)
+        self._metrics.received_events += 1
+        if self.track_state:
+            self._state_tracker.ingest(message)
+        return message
+
+    def _needs_await(self, message: EventMessage) -> bool:
+        """Queue ``message`` if nothing has to be awaited; otherwise return ``True``."""
+        if self._handlers_any or self._handlers_by_event.get(message.event):
+            return True
+        return not self._enqueue_nowait(message)
+
+    async def _deliver(self, message: EventMessage) -> None:
+        """Run handlers for ``message`` and then queue it."""
+        await self._dispatch(message)
+        await self._enqueue_message(message)
+
+    async def _consume(self, data: bytes) -> bytes:  # pylint: disable=too-many-locals
+        """Decode every complete JSON message in ``data`` and return the leftover bytes.
+
+        This is the hot path. A read usually holds exactly one message, so the
+        whole chunk is parsed first. Otherwise it is split at message
+        boundaries, and anything unusual goes through ``_consume_slow``.
+        """
+        loads = _JSON_LOADS
+        accept = self._accept
+        needs_await = self._needs_await
+
+        # Only a chunk ending in ``}`` or whitespace can be one whole message.
+        tail = data[-1]
+        if tail == _CLOSE_BRACE or tail <= 0x20:
+            try:
+                decoded = loads(data)
+            except ValueError:
+                pass
+            else:
+                message = accept(decoded, data)
+                if message is not None and needs_await(message):
+                    await self._deliver(message)
+                return b""
+
+        # Frame ``data`` at each boundary; the last frame runs to the end.
+        starts = [0]
+        ends = []
+        for match in _FRAME_BOUNDARY_RE.finditer(data):
+            ends.append(match.start() + 1)
+            starts.append(match.end() - 2)
+        ends.append(len(data))
+        last = len(ends) - 1
+        remainder = b""
+        for index, start in enumerate(starts):
+            frame = data[start : ends[index]] if last else data
+            if (
+                index == last
+                and frame[0] == _OPEN_BRACE
+                and frame.rstrip()[-1] != _CLOSE_BRACE
+            ):
+                remainder = frame  # incomplete message, wait for more bytes
                 break
+            try:
+                decoded = loads(frame)
+            except ValueError:
+                leftover = await self._consume_slow(frame)
+                if index == last:
+                    remainder = leftover
+                continue
+            message = accept(decoded, frame)
+            if message is not None and needs_await(message):
+                await self._deliver(message)
 
-            raw = buffer[pos:end_idx] if include_raw else ""
-            pos = end_idx
-            await self._handle_decoded_frame(decoded, raw)
-
-        remainder = "" if pos >= buf_len else (buffer[pos:] if pos > 0 else buffer)
         if len(remainder) > _MAX_BUFFER_BYTES:
             raise ValueError(
                 f"Stream buffer exceeded {_MAX_BUFFER_BYTES} bytes without a complete JSON object"
             )
         return remainder
+
+    async def _consume_slow(self, data: bytes) -> bytes:
+        """Tolerant decoder for data the fast path rejected.
+
+        Handles leading garbage, invalid UTF-8 (replaced with U+FFFD) and
+        messages split in the middle of a multibyte character.
+        """
+        head, tail = _split_incomplete_utf8(data)
+        try:
+            text = head.decode("utf-8")
+        except UnicodeDecodeError:
+            text = head.decode("utf-8", "replace")
+            self._logger.warning("received invalid UTF-8 bytes; replaced with U+FFFD")
+
+        raw_decode = json.JSONDecoder().raw_decode
+        text_len = len(text)
+        pos = 0
+        while pos < text_len:
+            if text[pos] != "{":
+                match = _WHITESPACE_RE.match(text, pos)
+                if match is not None:
+                    pos = match.end()
+                if pos >= text_len:
+                    break
+                if text[pos] != "{":
+                    pos = text.find("{", pos)
+                    if pos == -1:
+                        pos = text_len
+                        break
+            try:
+                decoded, end_idx = raw_decode(text, pos)
+            except _JSON_DECODE_ERROR:
+                break
+            message = self._accept(decoded, text[pos:end_idx])
+            pos = end_idx
+            if message is not None and self._needs_await(message):
+                await self._deliver(message)
+
+        return (text[pos:].encode("utf-8") if pos < text_len else b"") + tail
 
     async def _dispatch(self, message: EventMessage) -> None:
         """Dispatch ``message`` to global handlers and event-specific handlers."""
@@ -1081,6 +1322,20 @@ class StatsClient:
                     await result
             except Exception as exc:
                 self._logger.error("lifecycle handler error: %s", exc)
+
+
+def _split_incomplete_utf8(data: bytes) -> tuple[bytes, bytes]:
+    """Split off a multibyte UTF-8 sequence cut short at the end of ``data``."""
+    for back in range(1, min(3, len(data)) + 1):
+        byte = data[-back]
+        if byte & 0xC0 == 0x80:  # continuation byte, keep looking for the lead
+            continue
+        if byte >= 0xC0:
+            needed = 2 if byte < 0xE0 else 3 if byte < 0xF0 else 4
+            if needed > back:
+                return data[:-back], data[-back:]
+        break
+    return data, b""
 
 
 def _parse_message_obj(

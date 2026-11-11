@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .client import StatsClient
+from .commands import COMMAND_NAMES, InvalidCommandError, build_command
 from .config import (
     DEFAULT_PACKET_SEND_RATE,
     DEFAULT_STATS_API_PORT,
@@ -60,6 +61,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_PACKET_SEND_RATE,
         help="PacketSendRate to write when enabling the exporter.",
     )
+    enable_parser.add_argument(
+        "--web-port",
+        type=int,
+        default=None,
+        help="WebSocket port to write (0 disables it). Left untouched by default.",
+    )
     enable_parser.set_defaults(func=_run_enable)
 
     disable_parser = subparsers.add_parser(
@@ -91,6 +98,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     listen_parser.set_defaults(func=_run_listen)
 
+    send_parser = subparsers.add_parser(
+        "send",
+        help="Send one command to the game and exit.",
+    )
+    send_parser.add_argument("name", choices=COMMAND_NAMES)
+    send_parser.add_argument(
+        "data",
+        nargs="?",
+        default="{}",
+        help="Command variables as JSON, for example '{\"bVisible\": false}'.",
+    )
+    send_parser.add_argument("--host", default="127.0.0.1")
+    send_parser.add_argument("--port", type=int, default=DEFAULT_STATS_API_PORT)
+    send_parser.set_defaults(func=_run_send)
+
     return parser
 
 
@@ -108,6 +130,7 @@ def _run_enable(args: argparse.Namespace) -> int:
         port=args.port,
         packet_send_rate=args.rate,
         path=args.path,
+        web_port=args.web_port,
     )
     print(json.dumps(asdict(status), indent=2))
     print("Restart Rocket League after changing the config file.")
@@ -124,6 +147,34 @@ def _run_disable(args: argparse.Namespace) -> int:
     )
     print(json.dumps(asdict(status), indent=2))
     print("Restart Rocket League after changing the config file.")
+    return 0
+
+
+def _run_send(args: argparse.Namespace) -> int:
+    """Validate one command, send it to the game, and print what was sent."""
+    try:
+        command = build_command(args.name, json.loads(args.data))
+    except (InvalidCommandError, json.JSONDecodeError) as exc:
+        print(f"Invalid command: {exc}")
+        return 2
+    return asyncio.run(_send(args, command))
+
+
+async def _send(args: argparse.Namespace, command: dict[str, object]) -> int:
+    """Open a short-lived connection and write ``command`` to the socket."""
+    client = StatsClient(host=args.host, port=args.port, reconnect=False)
+    connected = asyncio.Event()
+    client.on_connect(connected.set)
+    await client.connect()
+    try:
+        await asyncio.wait_for(connected.wait(), timeout=client.connect_timeout + 1)
+    except asyncio.TimeoutError:
+        await client.disconnect()
+        print(f"Could not connect to {args.host}:{args.port}: {client.last_error}")
+        return 1
+    await client.send_command(command)
+    await client.disconnect()
+    print(json.dumps(command))
     return 0
 
 
