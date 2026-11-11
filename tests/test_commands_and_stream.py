@@ -25,11 +25,12 @@ from rlstatsapi import (
     set_stats_api_web_port,
 )
 from rlstatsapi import client as client_module
+from rlstatsapi import config
 from rlstatsapi.models import EventMessage
 from rlstatsapi.state import MatchStateTracker
 
 
-class _ChunkReader:
+class _ChunkReader:  # pylint: disable=too-few-public-methods
     """Minimal ``StreamReader`` stand-in that returns preset chunks."""
 
     def __init__(self, chunks: list[bytes]) -> None:
@@ -313,8 +314,6 @@ def test_port_conflicts_with_default_web_port_when_key_is_missing(
 def test_discovery_prefers_ta_file_over_default_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from rlstatsapi import config
-
     folder = tmp_path / "Documents" / "My Games" / "Rocket League" / "TAGame" / "Config"
     folder.mkdir(parents=True)
     (folder / "DefaultStatsAPI.ini").write_text("Port=1\n", encoding="utf-8")
