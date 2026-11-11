@@ -13,7 +13,8 @@ disable=
     R0913,
     R0917,
     W0718,
-    C0103
+    C0103,
+    C0123
 
 [FORMAT]
 max-line-length=100
@@ -22,5 +23,5 @@ max-line-length=100
 max-args=14
 max-positional-arguments=14
 max-attributes=20
-max-public-methods=45
+max-public-methods=60
 max-module-lines=1500

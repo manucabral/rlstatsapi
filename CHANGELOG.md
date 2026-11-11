@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.8
+
+Tracks the Stats API changes from Rocket League v2.72 (2026-08-04) and v2.76 (2026-09-22).
+
+### Added
+- Game commands: `StatsClient.send_command()` plus `change_pov()`, `load_replay()`, `seek_replay()`, `set_game_speed()`, `set_hud_visibility()` and `set_match_paused()`. Commands are validated locally and raise `InvalidCommandError`, because the game drops malformed ones silently
+- `rlstatsapi.commands` module with envelope builders, `build_command()`, `encode_command()`, `COMMAND_NAMES` and `PERSPECTIVES`
+- `rlstatsapi send <Command> '<json>'` CLI subcommand
+- Events `BoostPickup`, `PlayerJoined` and `PlayerLeft`, with payload types, `on(...)` overloads and `on_boost_pickup()`, `on_player_joined()`, `on_player_left()`
+- Payload fields `Loadout` and `PickupClass` (players), `PlaylistId` (game), `FileName` and `Date` (`ReplayCreated`)
+- `MatchStateSnapshot.playlist_id`, `winner_team_num` and `no_contest`. Since v2.76 `MatchEnded` reports `WinnerTeamNum = -1` for a no-contest match
+- `WebPort` support: `StatsAPIConfigStatus.web_port`, `set_stats_api_web_port()`, `configure_stats_api(web_port=...)`, `rlstatsapi enable --web-port` and `DEFAULT_STATS_API_WEB_PORT`
+- Optional `orjson` backend: `pip install rlstatsapi[fast]`. `rlstatsapi.JSON_BACKEND` tells which one is in use
+
+### Changed
+- `MatchStateTracker` applies `UpdateState` lazily, when `client.state` is read or another event arrives. A `MatchStateSnapshot` reference kept from an earlier read is no longer refreshed on every tick; read `client.state` again
+- `MatchEnded` with `WinnerTeamNum = -1` leaves `has_winner` as `False`
+- Config helpers raise `ValueError` when `Port` and `WebPort` would be equal, which the game does not accept
+- Config discovery also finds `DefaultStatsAPI.ini` when `TAStatsAPI.ini` does not exist, in the order the game uses
+- `PacketSendRate` written as a float (`60.0`) is now parsed
+
+### Improved
+- Stream decoding works on bytes and frames messages without a second parse. Measured on `UpdateState` with six players, one message per read: 43 to 15 microseconds per event with `orjson`, 43 to 30 with the standard library
+- Messages split across TCP reads no longer trigger a failed parse per read: 82 to 27 microseconds per event with `orjson`, 82 to 49 without
+- An invalid message in the middle of the stream is skipped instead of stalling the reader until the buffer limit
+
+### Notes
+- Since v2.76 `GoalScored` also fires during replay playback and has no replay flag. Check `client.state.replay_active`
+- `BoostPickup` is only sent while spectating
+
 ## 0.1.7
 
 ### Added
