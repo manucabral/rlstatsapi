@@ -32,6 +32,7 @@ Fired repeatedly while a match is live. Contains full game + player snapshot.
         "Touches": 12,
         "CarTouches": 10,
         "Demos": 0,
+        "Loadout": ["body_grain", "Skin_bartees", "Wheel_SoccerBall", "Boost_AlphaReward", "None", "None"],
         "bHasCar": true,
         "Speed": 1400.0,
         "Boost": 72,
@@ -40,7 +41,8 @@ Fired repeatedly while a match is live. Contains full game + player snapshot.
         "bOnWall": false,
         "bPowersliding": false,
         "bDemolished": false,
-        "bSupersonic": false
+        "bSupersonic": false,
+        "PickupClass": "SpecialPickup_GrapplingHook_TA"
       }
     ],
     "Game": {
@@ -60,6 +62,7 @@ Fired repeatedly while a match is live. Contains full game + player snapshot.
           "ColorSecondary": "#000000"
         }
       ],
+      "PlaylistId": 11,
       "TimeSeconds": 204,
       "bOvertime": false,
       "Frame": 6120,
@@ -77,6 +80,14 @@ Fired repeatedly while a match is live. Contains full game + player snapshot.
   }
 }
 ```
+
+Fields added in v2.72:
+
+| Field | Type | Notes |
+|---|---|---|
+| `Players[].Loadout` | `list[str]` | Equipped item asset names by product slot. Empty slots are `"None"` |
+| `Players[].PickupClass` | `str` | Rumble power-up the player holds. Spectator only, absent outside Rumble |
+| `Game.PlaylistId` | `int` | Playlist of the current match |
 
 ---
 
@@ -108,6 +119,34 @@ Fired when a player hits the ball.
   }
 }
 ```
+
+---
+
+## BoostPickup
+
+Fired when a car collects a boost pad or pill. Spectator only.
+
+```json
+{
+  "event": "BoostPickup",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "Player": { "Name": "PlayerA", "Shortcut": 1, "TeamNum": 0 },
+    "Location": { "X": -3072, "Y": 0, "Z": 73 },
+    "BoostAmount": 100,
+    "BoostType": "BoostType_Pill",
+    "bReplay": false
+  }
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `Player` | `PlayerRef` | Player who collected the boost |
+| `Location` | `Vector3` | World position of the pickup |
+| `BoostAmount` | `float` | Boost granted |
+| `BoostType` | `str` | `BoostType_Pad` (small) or `BoostType_Pill` (full) |
+| `bReplay` | `bool` | `true` if it happened during replay playback |
 
 ---
 
@@ -319,6 +358,8 @@ Fired when a match finishes. Includes the winning team.
 }
 ```
 
+Since v2.76 a no-contest match reports `"WinnerTeamNum": -1`. `client.state.no_contest` is then `True` and `has_winner` stays `False`.
+
 ---
 
 ## MatchPaused
@@ -351,6 +392,40 @@ Fired when the match resumes after a pause.
 
 ---
 
+## PlayerJoined
+
+Fired when a player is added to the current match.
+
+```json
+{
+  "event": "PlayerJoined",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "PlayerName": "PlayerA",
+    "PrimaryId": "Steam|123|0"
+  }
+}
+```
+
+---
+
+## PlayerLeft
+
+Fired when a player is removed from the current match.
+
+```json
+{
+  "event": "PlayerLeft",
+  "data": {
+    "MatchGuid": "A1B2C3D4E5F6",
+    "PlayerName": "PlayerA",
+    "PrimaryId": "Steam|123|0"
+  }
+}
+```
+
+---
+
 ## PodiumStart
 
 Fired when the post-match podium sequence begins.
@@ -368,16 +443,20 @@ Fired when the post-match podium sequence begins.
 
 ## ReplayCreated
 
-Fired when an in-match replay starts (e.g. goal replay saved as replay).
+Fired when a replay loaded from Match History starts. Goal replays do not fire it.
 
 ```json
 {
   "event": "ReplayCreated",
   "data": {
-    "MatchGuid": "A1B2C3D4E5F6"
+    "MatchGuid": "A1B2C3D4E5F6",
+    "FileName": "Stadium_P_2026-06-05_18-42",
+    "Date": "2026-06-05 18:42:13"
   }
 }
 ```
+
+`FileName` can be passed to the [`LoadReplay`](commands.md) command.
 
 ---
 

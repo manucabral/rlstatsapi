@@ -4,6 +4,10 @@
 
 ::: rlstatsapi.client
 
+## `rlstatsapi.commands`
+
+::: rlstatsapi.commands
+
 ## `rlstatsapi.config`
 
 ::: rlstatsapi.config

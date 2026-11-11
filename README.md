@@ -17,6 +17,12 @@ From [PyPI](https://pypi.org/project/rlstatsapi/):
 pip install rlstatsapi
 ```
 
+With the faster JSON backend ([orjson](https://github.com/ijl/orjson), about twice the decoding speed):
+
+```bash
+pip install "rlstatsapi[fast]"
+```
+
 From GitHub:
 
 ```bash
@@ -73,12 +79,28 @@ asyncio.run(main())
 
 ![UI demo](docs/videos/ui.gif)
 
+## Commands
+
+The game accepts commands on the same socket (Rocket League v2.72 or newer):
+
+```python
+async with StatsClient() as client:
+    await client.wait_for("UpdateState")
+    await client.set_hud_visibility(False)
+    await client.change_pov(focus="Ball", perspective="Fly")
+```
+
+Available: `change_pov`, `load_replay`, `seek_replay`, `set_game_speed`,
+`set_hud_visibility` and `set_match_paused`. See the
+[commands guide](https://manucabral.github.io/rlstatsapi/commands/).
+
 ## CLI
 
 ```bash
 rlstatsapi status
 rlstatsapi enable --port 49123 --rate 30
 rlstatsapi listen --event GoalScored
+rlstatsapi send SetHUDVisibility '{"bVisible": false}'
 ```
 
 You can also listen to multiple events:
@@ -109,7 +131,7 @@ def on_goal(msg: EventMessage) -> None:
 
 ## Notes
 
-- In current Rocket League builds this endpoint behaves like a TCP JSON stream in practice.
+- The client uses the game's TCP socket (`Port`). The WebSocket listener (`WebPort`) is not needed.
 - Some fields, such as `MatchGuid`, are only present in online/LAN contexts.
 
 ## Disclaimer

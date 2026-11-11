@@ -46,6 +46,7 @@ nav:
   - Recipes: recipes.md
   - Compatibility: compatibility.md
   - Events: events.md
+  - Commands: commands.md
   - API Reference: api.md
   - Examples: examples.md
   - Typing: typing.md
